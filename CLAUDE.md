@@ -38,10 +38,16 @@ docs/            ← Contributor guides
 
 ## Before Any Work
 
-Load these documents in order:
+If you are **building a SaaS app using this kit**, start here:
+→ **`docs/agent-instructions.md`** — comprehensive agent guide (system overview, module selection, wiring patterns, CLI reference, common mistakes)
+
+Then load in order:
 1. `orchestration/playbook.md` — the 6-phase workflow
 2. `orchestration/composition-rulebook.md` — all wiring rules
 3. `orchestration/registry.yaml` — available modules
+
+If you are **contributing to this registry** (adding modules, editing contracts):
+→ Skip to the Key Rules and Adding a Module sections below.
 
 ---
 

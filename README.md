@@ -18,6 +18,19 @@ module-registry/
 
 ---
 
+## Documentation
+
+| Doc | Audience | What it covers |
+|-----|----------|---------------|
+| [`docs/getting-started.md`](docs/getting-started.md) | **Developers** | Install modkit, scaffold a project, run locally, add handlers and pages |
+| [`docs/agent-instructions.md`](docs/agent-instructions.md) | **AI agents** | System overview, module selection, wiring patterns, CLI reference, common mistakes |
+| [`orchestration/playbook.md`](orchestration/playbook.md) | Agents | 6-phase workflow for building SaaS apps (authoritative) |
+| [`orchestration/composition-rulebook.md`](orchestration/composition-rulebook.md) | Agents | All wiring rules with Go + TypeScript examples |
+| [`docs/module-registry-spec.md`](docs/module-registry-spec.md) | Contributors | How to add a new module to the registry |
+| [`docs/modkit-cli-spec.md`](docs/modkit-cli-spec.md) | Contributors | Full modkit CLI specification |
+
+---
+
 ## Quick Start (Using the CLI)
 
 **Install modkit:**
