@@ -1,0 +1,46 @@
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+
+type ApiResponse<T> = { data: T } | { error: string }
+
+async function request<T>(
+  path: string,
+  options?: RequestInit,
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  })
+
+  const body: ApiResponse<T> = await res.json()
+
+  if ('error' in body) {
+    throw new Error(body.error)
+  }
+
+  return body.data
+}
+
+export const api = {
+  get: <T>(path: string, init?: RequestInit) =>
+    request<T>(path, { method: 'GET', ...init }),
+
+  post: <T>(path: string, data?: unknown, init?: RequestInit) =>
+    request<T>(path, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...init,
+    }),
+
+  put: <T>(path: string, data?: unknown, init?: RequestInit) =>
+    request<T>(path, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      ...init,
+    }),
+
+  delete: <T>(path: string, init?: RequestInit) =>
+    request<T>(path, { method: 'DELETE', ...init }),
+}

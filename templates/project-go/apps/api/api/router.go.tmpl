@@ -1,0 +1,79 @@
+// Package api wires HTTP routes and middleware.
+package api
+
+import (
+	"net/http"
+
+	contracts "github.com/dat2503/modkit/contracts/go"
+)
+
+// Deps holds all module dependencies injected into the router.
+type Deps struct {
+	{{- if .HasModule "observability"}}
+	Obs contracts.ObservabilityService
+	{{- end}}
+	{{- if .HasModule "error-tracking"}}
+	Errors contracts.ErrorTrackingService
+	{{- end}}
+	{{- if .HasModule "auth"}}
+	Auth contracts.AuthService
+	{{- end}}
+	{{- if .HasModule "payments"}}
+	Payments contracts.PaymentsService
+	{{- end}}
+	{{- if .HasModule "email"}}
+	Email contracts.EmailService
+	{{- end}}
+	{{- if .HasModule "storage"}}
+	Storage contracts.StorageService
+	{{- end}}
+	{{- if .HasModule "jobs"}}
+	Jobs contracts.JobsService
+	{{- end}}
+}
+
+// NewRouter creates the HTTP router with all middleware and routes wired.
+func NewRouter(deps Deps) http.Handler {
+	mux := http.NewServeMux()
+
+	// ── Middleware stack ─────────────────────────────────────────────────────
+	// Applied outermost first: recovery → tracing → logging → auth (on protected routes)
+
+	var handler http.Handler = mux
+
+	{{- if .HasModule "observability"}}
+	handler = tracingMiddleware(deps.Obs)(handler)
+	handler = loggingMiddleware(deps.Obs)(handler)
+	{{- end}}
+	{{- if .HasModule "error-tracking"}}
+	handler = recoveryMiddleware(deps.Errors)(handler)
+	{{- end}}
+
+	// ── Health ───────────────────────────────────────────────────────────────
+	mux.HandleFunc("GET /health", healthHandler)
+
+	// ── API v1 ───────────────────────────────────────────────────────────────
+	// TODO: register your route handlers here
+	// Example:
+	//   h := handlers.New(deps)
+	//   mux.HandleFunc("GET /api/v1/invoices", authRequired(deps.Auth, h.ListInvoices))
+	//   mux.HandleFunc("POST /api/v1/invoices", authRequired(deps.Auth, h.CreateInvoice))
+
+	{{- if .HasModule "payments"}}
+	// Webhook endpoints do NOT use auth middleware
+	mux.HandleFunc("POST /api/v1/webhooks/stripe", stripeWebhookHandler(deps.Payments))
+	{{- end}}
+
+	{{- if .HasModule "auth"}}
+	mux.HandleFunc("POST /api/v1/webhooks/clerk", clerkWebhookHandler(deps.Auth))
+	{{- end}}
+
+	return handler
+}
+
+// healthHandler returns 200 OK for load balancer health checks.
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"ok"}`))
+}

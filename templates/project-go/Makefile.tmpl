@@ -1,0 +1,77 @@
+.PHONY: dev build test lint type-check migrate infra-up infra-down
+
+# ── Dev ──────────────────────────────────────────────────────────────────────
+
+dev:
+	@echo "Starting API and web in parallel..."
+	@$(MAKE) -j2 dev-api dev-web
+
+dev-api:
+	cd apps/api && go run .
+
+dev-web:
+	cd apps/web && npm run dev
+
+# ── Build ─────────────────────────────────────────────────────────────────────
+
+build:
+	$(MAKE) build-api
+	$(MAKE) build-web
+
+build-api:
+	cd apps/api && go build -o bin/api .
+
+build-web:
+	cd apps/web && npm run build
+
+# ── Test ──────────────────────────────────────────────────────────────────────
+
+test:
+	cd apps/api && go test ./...
+
+test-verbose:
+	cd apps/api && go test -v ./...
+
+# ── Lint ──────────────────────────────────────────────────────────────────────
+
+lint:
+	cd apps/api && go vet ./...
+	cd apps/web && npm run lint
+
+type-check:
+	cd apps/web && npm run type-check
+
+# ── Database ──────────────────────────────────────────────────────────────────
+
+migrate:
+	cd apps/api && go run ./cmd/migrate up
+
+migrate-down:
+	cd apps/api && go run ./cmd/migrate down
+
+migrate-create:
+	@read -p "Migration name: " name; \
+	cd apps/api && go run ./cmd/migrate create $${name}
+
+# ── Infrastructure ────────────────────────────────────────────────────────────
+
+infra-up:
+	docker compose -f infra/docker-compose.yaml up -d
+
+infra-down:
+	docker compose -f infra/docker-compose.yaml down
+
+infra-logs:
+	docker compose -f infra/docker-compose.yaml logs -f
+
+# ── Setup ─────────────────────────────────────────────────────────────────────
+
+setup:
+	@echo "Installing web dependencies..."
+	cd apps/web && npm install
+	@echo "Downloading Go modules..."
+	cd apps/api && go mod download
+	@echo "Starting infrastructure..."
+	$(MAKE) infra-up
+	@echo ""
+	@echo "Setup complete. Run 'make dev' to start."

@@ -1,0 +1,169 @@
+package api
+
+import (
+	"context"
+	"net/http"
+	"strings"
+	"time"
+
+	contracts "github.com/dat2503/modkit/contracts/go"
+)
+
+// ── Tracing middleware ────────────────────────────────────────────────────────
+
+{{- if .HasModule "observability"}}
+func tracingMiddleware(obs contracts.ObservabilityService) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			operationName := r.Method + " " + r.URL.Path
+			ctx, span := obs.StartSpan(r.Context(), operationName)
+			defer span.End()
+
+			span.SetAttribute("http.method", r.Method)
+			span.SetAttribute("http.url", r.URL.String())
+			span.SetAttribute("http.user_agent", r.UserAgent())
+
+			rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+			next.ServeHTTP(rw, r.WithContext(ctx))
+
+			span.SetAttribute("http.status_code", rw.statusCode)
+		})
+	}
+}
+
+func loggingMiddleware(obs contracts.ObservabilityService) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+			next.ServeHTTP(rw, r)
+			obs.Log(r.Context(), contracts.LogLevelInfo, "request", map[string]any{
+				"method":   r.Method,
+				"path":     r.URL.Path,
+				"status":   rw.statusCode,
+				"duration": time.Since(start).Milliseconds(),
+			})
+		})
+	}
+}
+{{- end}}
+
+// ── Recovery middleware ───────────────────────────────────────────────────────
+
+{{- if .HasModule "error-tracking"}}
+func recoveryMiddleware(errSvc contracts.ErrorTrackingService) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					err, ok := rec.(error)
+					if !ok {
+						err = fmt.Errorf("panic: %v", rec)
+					}
+					errSvc.CaptureError(r.Context(), err, contracts.CaptureOptions{
+						Tags: map[string]string{"type": "panic"},
+					})
+					writeError(w, http.StatusInternalServerError, "internal server error")
+				}
+			}()
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+{{- end}}
+
+// ── Auth middleware ───────────────────────────────────────────────────────────
+
+{{- if .HasModule "auth"}}
+// authRequired wraps a handler to require a valid auth token.
+// Extracts the Bearer token from the Authorization header.
+func authRequired(auth contracts.AuthService, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if token == "" {
+			writeError(w, http.StatusUnauthorized, "missing authorization header")
+			return
+		}
+		user, err := auth.ValidateToken(r.Context(), token)
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, "invalid or expired token")
+			return
+		}
+		ctx := context.WithValue(r.Context(), contextKeyUser, user)
+		next(w, r.WithContext(ctx))
+	}
+}
+
+type contextKey string
+const contextKeyUser contextKey = "user"
+
+// UserFromContext extracts the authenticated user from the request context.
+func UserFromContext(ctx context.Context) (*contracts.AuthUser, bool) {
+	user, ok := ctx.Value(contextKeyUser).(*contracts.AuthUser)
+	return user, ok
+}
+{{- end}}
+
+// ── Webhook handlers ──────────────────────────────────────────────────────────
+
+{{- if .HasModule "payments"}}
+func stripeWebhookHandler(payments contracts.PaymentsService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "failed to read body")
+			return
+		}
+		event, err := payments.ConstructWebhookEvent(body, r.Header.Get("Stripe-Signature"))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid webhook signature")
+			return
+		}
+		// TODO: handle event types
+		switch event.Type {
+		case "checkout.session.completed":
+			// TODO: fulfill order
+		case "customer.subscription.deleted":
+			// TODO: deactivate subscription
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+{{- end}}
+
+{{- if .HasModule "auth"}}
+func clerkWebhookHandler(auth contracts.AuthService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// TODO: verify Svix signature and handle user lifecycle events
+		// event types: user.created, user.updated, user.deleted
+		w.WriteHeader(http.StatusOK)
+	}
+}
+{{- end}}
+
+// ── Response helpers ──────────────────────────────────────────────────────────
+
+// writeError writes a JSON error response.
+func writeError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	fmt.Fprintf(w, `{"error":{"message":%q}}`, msg)
+}
+
+// writeJSON writes a JSON success response wrapped in { "data": ... }.
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	// TODO: use encoding/json to marshal v into { "data": v }
+}
+
+// responseWriter wraps http.ResponseWriter to capture the status code.
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}

@@ -1,0 +1,12 @@
+name: {{.Name}}
+runtime: go
+go_module: {{.GoModule}}
+go_version: "{{.GoVersion}}"
+registry: github.com/dat2503/modkit
+registry_version: "{{.RegistryVersion}}"
+
+modules:
+{{- range .Modules}}
+  - name: {{.Name}}
+    impl: {{.Impl}}
+{{- end}}

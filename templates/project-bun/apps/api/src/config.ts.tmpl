@@ -1,0 +1,99 @@
+export interface Config {
+  port: number
+  appEnv: string
+  databaseUrl: string
+{{- if .HasModule "cache"}}
+  redisUrl: string
+{{- end}}
+{{- if .HasModule "auth"}}
+  clerkSecretKey: string
+{{- end}}
+{{- if .HasModule "payments"}}
+  stripeSecretKey: string
+  stripeWebhookSecret: string
+{{- end}}
+{{- if .HasModule "email"}}
+  resendApiKey: string
+  emailFrom: string
+{{- end}}
+{{- if .HasModule "storage"}}
+  awsAccessKeyId: string
+  awsSecretAccessKey: string
+  awsRegion: string
+  s3Bucket: string
+{{- end}}
+{{- if .HasModule "observability"}}
+  otelServiceName: string
+  otelEndpoint: string
+{{- end}}
+{{- if .HasModule "error-tracking"}}
+  sentryDsn: string
+  sentryEnvironment: string
+{{- end}}
+{{- if .HasModule "feature-flags"}}
+  flagsmithServerApiKey: string
+{{- end}}
+{{- if .HasModule "search"}}
+  elasticsearchUrl: string
+{{- end}}
+}
+
+export function loadConfig(): Config {
+  const missing: string[] = []
+
+  function require(name: string): string {
+    const val = process.env[name]
+    if (!val) missing.push(name)
+    return val ?? ''
+  }
+
+  function optional(name: string, fallback: string): string {
+    return process.env[name] ?? fallback
+  }
+
+  const cfg: Config = {
+    port: parseInt(optional('PORT', '8080'), 10),
+    appEnv: optional('APP_ENV', 'development'),
+    databaseUrl: require('DATABASE_URL'),
+{{- if .HasModule "cache"}}
+    redisUrl: require('REDIS_URL'),
+{{- end}}
+{{- if .HasModule "auth"}}
+    clerkSecretKey: require('CLERK_SECRET_KEY'),
+{{- end}}
+{{- if .HasModule "payments"}}
+    stripeSecretKey: require('STRIPE_SECRET_KEY'),
+    stripeWebhookSecret: require('STRIPE_WEBHOOK_SECRET'),
+{{- end}}
+{{- if .HasModule "email"}}
+    resendApiKey: require('RESEND_API_KEY'),
+    emailFrom: require('EMAIL_FROM'),
+{{- end}}
+{{- if .HasModule "storage"}}
+    awsAccessKeyId: require('AWS_ACCESS_KEY_ID'),
+    awsSecretAccessKey: require('AWS_SECRET_ACCESS_KEY'),
+    awsRegion: optional('AWS_REGION', 'us-east-1'),
+    s3Bucket: require('S3_BUCKET'),
+{{- end}}
+{{- if .HasModule "observability"}}
+    otelServiceName: optional('OTEL_SERVICE_NAME', '{{.Name}}'),
+    otelEndpoint: optional('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://localhost:4317'),
+{{- end}}
+{{- if .HasModule "error-tracking"}}
+    sentryDsn: require('SENTRY_DSN'),
+    sentryEnvironment: optional('SENTRY_ENVIRONMENT', 'development'),
+{{- end}}
+{{- if .HasModule "feature-flags"}}
+    flagsmithServerApiKey: require('FLAGSMITH_SERVER_API_KEY'),
+{{- end}}
+{{- if .HasModule "search"}}
+    elasticsearchUrl: optional('ELASTICSEARCH_URL', 'http://localhost:9200'),
+{{- end}}
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
+  }
+
+  return cfg
+}

@@ -1,0 +1,32 @@
+{
+  "name": "{{.Name}}-api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun run dist/index.js",
+    "test": "bun test",
+    "lint": "bunx @biomejs/biome check .",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4",
+    "@hono/node-server": "^1"{{- if .HasModule "auth"}},
+    "@clerk/backend": "^1"{{- end}}{{- if .HasModule "payments"}},
+    "stripe": "^15"{{- end}}{{- if .HasModule "email"}},
+    "resend": "^3"{{- end}}{{- if .HasModule "cache"}},
+    "ioredis": "^5"{{- end}}{{- if .HasModule "observability"}},
+    "@opentelemetry/sdk-node": "^0.52",
+    "@opentelemetry/auto-instrumentations-node": "^0.46"{{- end}}{{- if .HasModule "error-tracking"}},
+    "@sentry/bun": "^8"{{- end}}{{- if .HasModule "jobs"}},
+    "bullmq": "^5"{{- end}}{{- if .HasModule "search"}},
+    "@elastic/elasticsearch": "^8"{{- end}}{{- if .HasModule "feature-flags"}},
+    "flagsmith-nodejs": "^3"{{- end}}
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1",
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}

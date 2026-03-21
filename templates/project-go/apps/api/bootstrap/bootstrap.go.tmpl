@@ -1,0 +1,141 @@
+// Package bootstrap initializes all modules in the correct order and wires them together.
+// Module initialization order (from composition-rulebook.md §3):
+//   1. observability  — must be first
+//   2. error-tracking — must be second
+//   3. cache          — before auth and jobs
+//   4. auth           — after cache
+//   5. remaining modules in any order
+package bootstrap
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"os"
+
+	// Module implementations — imported from modules/ directory
+	{{- if .HasModule "observability"}}
+	obspkg "{{.GoModule}}/modules/observability"
+	{{- end}}
+	{{- if .HasModule "error-tracking"}}
+	errpkg "{{.GoModule}}/modules/error-tracking"
+	{{- end}}
+	{{- if .HasModule "cache"}}
+	cachepkg "{{.GoModule}}/modules/cache"
+	{{- end}}
+	{{- if .HasModule "auth"}}
+	authpkg "{{.GoModule}}/modules/auth"
+	{{- end}}
+	{{- if .HasModule "payments"}}
+	paymentspkg "{{.GoModule}}/modules/payments"
+	{{- end}}
+	{{- if .HasModule "email"}}
+	emailpkg "{{.GoModule}}/modules/email"
+	{{- end}}
+	{{- if .HasModule "storage"}}
+	storagepkg "{{.GoModule}}/modules/storage"
+	{{- end}}
+	{{- if .HasModule "jobs"}}
+	jobspkg "{{.GoModule}}/modules/jobs"
+	{{- end}}
+
+	"{{.GoModule}}/config"
+	"{{.GoModule}}/api"
+)
+
+// Init initializes all modules and returns a wired HTTP handler and a shutdown function.
+// Call shutdown(ctx) during graceful shutdown to flush telemetry and close connections.
+func Init(ctx context.Context) (http.Handler, func(context.Context), error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, nil, fmt.Errorf("load config: %w", err)
+	}
+
+	var shutdowns []func(context.Context)
+
+	// ── 1. Observability (always first) ─────────────────────────────────────
+	{{- if .HasModule "observability"}}
+	obsSvc, err := obspkg.New(cfg.Observability)
+	if err != nil {
+		return nil, nil, fmt.Errorf("init observability: %w", err)
+	}
+	shutdowns = append(shutdowns, obsSvc.Shutdown)
+	{{- end}}
+
+	// ── 2. Error tracking (always second) ───────────────────────────────────
+	{{- if .HasModule "error-tracking"}}
+	errSvc, err := errpkg.New(cfg.ErrorTracking)
+	if err != nil {
+		return nil, nil, fmt.Errorf("init error-tracking: %w", err)
+	}
+	shutdowns = append(shutdowns, func(ctx context.Context) { errSvc.Flush(ctx) })
+	{{- end}}
+
+	// ── 3. Cache (before auth and jobs) ─────────────────────────────────────
+	{{- if .HasModule "cache"}}
+	cacheSvc, err := cachepkg.New(cfg.Cache)
+	if err != nil {
+		return nil, nil, fmt.Errorf("init cache: %w", err)
+	}
+	{{- end}}
+
+	// ── 4. Auth (after cache) ────────────────────────────────────────────────
+	{{- if .HasModule "auth"}}
+	authSvc, err := authpkg.New(cfg.Auth, cacheSvc)
+	if err != nil {
+		return nil, nil, fmt.Errorf("init auth: %w", err)
+	}
+	{{- end}}
+
+	// ── 5. Remaining modules ─────────────────────────────────────────────────
+	{{- if .HasModule "payments"}}
+	paymentsSvc, err := paymentspkg.New(cfg.Payments)
+	if err != nil {
+		return nil, nil, fmt.Errorf("init payments: %w", err)
+	}
+	{{- end}}
+
+	{{- if .HasModule "email"}}
+	emailSvc, err := emailpkg.New(cfg.Email)
+	if err != nil {
+		return nil, nil, fmt.Errorf("init email: %w", err)
+	}
+	{{- end}}
+
+	{{- if .HasModule "storage"}}
+	storageSvc, err := storagepkg.New(cfg.Storage)
+	if err != nil {
+		return nil, nil, fmt.Errorf("init storage: %w", err)
+	}
+	{{- end}}
+
+	{{- if .HasModule "jobs"}}
+	jobsSvc, err := jobspkg.New(cfg.Jobs, cacheSvc)
+	if err != nil {
+		return nil, nil, fmt.Errorf("init jobs: %w", err)
+	}
+	go jobsSvc.Start(ctx)
+	shutdowns = append(shutdowns, jobsSvc.Stop)
+	{{- end}}
+
+	// ── Wire HTTP handler ────────────────────────────────────────────────────
+	handler := api.NewRouter(api.Deps{
+		{{- if .HasModule "observability"}}Obs:      obsSvc,{{- end}}
+		{{- if .HasModule "error-tracking"}}Errors:   errSvc,{{- end}}
+		{{- if .HasModule "auth"}}Auth:     authSvc,{{- end}}
+		{{- if .HasModule "payments"}}Payments: paymentsSvc,{{- end}}
+		{{- if .HasModule "email"}}Email:    emailSvc,{{- end}}
+		{{- if .HasModule "storage"}}Storage:  storageSvc,{{- end}}
+		{{- if .HasModule "jobs"}}Jobs:     jobsSvc,{{- end}}
+	})
+
+	shutdown := func(ctx context.Context) {
+		for i := len(shutdowns) - 1; i >= 0; i-- {
+			shutdowns[i](ctx)
+		}
+	}
+
+	return handler, shutdown, nil
+}
+
+var _ = os.Getenv // suppress unused import

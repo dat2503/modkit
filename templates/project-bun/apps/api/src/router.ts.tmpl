@@ -1,0 +1,86 @@
+import { Hono } from 'hono'
+import { logger } from 'hono/logger'
+import { secureHeaders } from 'hono/secure-headers'
+{{- if .HasModule "auth"}}
+import type { IAuthService } from '../../../../contracts/ts/auth'
+{{- end}}
+{{- if .HasModule "payments"}}
+import type { IPaymentsService } from '../../../../contracts/ts/payments'
+{{- end}}
+{{- if .HasModule "email"}}
+import type { IEmailService } from '../../../../contracts/ts/email'
+{{- end}}
+{{- if .HasModule "storage"}}
+import type { IStorageService } from '../../../../contracts/ts/storage'
+{{- end}}
+{{- if .HasModule "jobs"}}
+import type { IJobsService } from '../../../../contracts/ts/jobs'
+{{- end}}
+{{- if .HasModule "realtime"}}
+import type { IRealtimeService } from '../../../../contracts/ts/realtime'
+{{- end}}
+{{- if .HasModule "search"}}
+import type { ISearchService } from '../../../../contracts/ts/search'
+{{- end}}
+{{- if .HasModule "feature-flags"}}
+import type { IFeatureFlagsService } from '../../../../contracts/ts/feature-flags'
+{{- end}}
+
+export interface Deps {
+{{- if .HasModule "auth"}}
+  auth: IAuthService
+{{- end}}
+{{- if .HasModule "payments"}}
+  payments: IPaymentsService
+{{- end}}
+{{- if .HasModule "email"}}
+  email: IEmailService
+{{- end}}
+{{- if .HasModule "storage"}}
+  storage: IStorageService
+{{- end}}
+{{- if .HasModule "jobs"}}
+  jobs: IJobsService
+{{- end}}
+{{- if .HasModule "realtime"}}
+  realtime: IRealtimeService
+{{- end}}
+{{- if .HasModule "search"}}
+  search: ISearchService
+{{- end}}
+{{- if .HasModule "feature-flags"}}
+  featureFlags: IFeatureFlagsService
+{{- end}}
+}
+
+export function newRouter(deps: Deps): Hono {
+  const app = new Hono()
+
+  app.use('*', logger())
+  app.use('*', secureHeaders())
+
+  // Health check
+  app.get('/health', (c) => c.json({ status: 'ok' }))
+{{- if .HasModule "payments"}}
+
+  // Stripe webhook — raw body required, no auth middleware
+  app.post('/webhooks/stripe', async (c) => {
+    // TODO: verify Stripe webhook signature, process event
+    return c.json({ received: true })
+  })
+{{- end}}
+{{- if .HasModule "auth"}}
+
+  // Webhook from Clerk for user sync
+  app.post('/webhooks/clerk', async (c) => {
+    // TODO: verify Clerk webhook signature, sync user data
+    return c.json({ received: true })
+  })
+{{- end}}
+
+  // TODO: add your routes here
+  // Example:
+  // app.get('/api/items', authRequired(deps.auth), async (c) => { ... })
+
+  return app
+}
