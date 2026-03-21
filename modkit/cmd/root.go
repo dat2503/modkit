@@ -61,5 +61,6 @@ func init() {
 		upgradeCmd,
 		doctorCmd,
 		runtimesCmd,
+		setupCmd,
 	)
 }

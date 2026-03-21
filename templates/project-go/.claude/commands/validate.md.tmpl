@@ -1,0 +1,62 @@
+---
+description: Validate module wiring in this modkit project
+---
+
+Validate that all modules are correctly wired in this project. Run each check and report PASS or FAIL.
+
+## Checks
+
+### 1. Read project state
+- Read `.modkit.yaml` for the list of expected modules
+- Read `~/.modkit/cache/orchestration/composition-rulebook.md` for rules
+
+### 2. Bootstrap order check
+- Read `apps/api/bootstrap/bootstrap.go`
+- Verify modules are initialized in this order:
+  1. observability (first)
+  2. error-tracking (second)
+  3. cache (before auth and jobs)
+  4. auth (after cache)
+  5. remaining modules
+- Verify every module listed in `.modkit.yaml` has a corresponding init block
+- Verify each init uses explicit `Pkg.Config{...}` struct conversion (not passing config directly)
+
+### 3. Config check
+- Read `apps/api/config/config.go`
+- For each module in `.modkit.yaml`, verify:
+  - A config struct exists (e.g., `AuthConfig`, `CacheConfig`)
+  - `Load()` reads all required env vars for that module
+  - Required vars use `get(key, true)`, optional use `get(key, false)`
+
+### 4. Env check
+- Read `.env.example`
+- Cross-reference with `config.go` — every env var read by `Load()` should appear in `.env.example`
+- Flag any missing vars
+
+### 5. Module files check
+- For each module in `.modkit.yaml`, verify `apps/api/modules/{name}/` directory exists
+- Verify each module directory contains at least one `.go` file
+
+### 6. Interface check
+- Grep for concrete implementation imports outside of `bootstrap/` and `modules/`
+- Handlers, services, and other app code should only import `contracts`, not implementation packages
+- Flag any violations
+
+### 7. Build check
+- Run: `cd apps/api && go build ./...`
+- Report compilation errors if any
+
+## Output
+
+```
+Module Wiring Validation
+========================
+Bootstrap order:  PASS/FAIL
+Config coverage:  PASS/FAIL
+Env vars:         PASS/FAIL
+Module files:     PASS/FAIL
+Interface-first:  PASS/FAIL
+Build:            PASS/FAIL
+
+[Details for any FAILs]
+```

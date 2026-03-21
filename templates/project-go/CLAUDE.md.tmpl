@@ -57,8 +57,25 @@ Makefile         ← All common tasks
 
 ---
 
-## Module Registry
+## Skills
 
-To add a module: `modkit pull <module-name>`
-To see available modules: `modkit list`
-To validate wiring: `modkit validate`
+This project includes Claude Code skills for common operations:
+
+- `/add-module` — add a new module from the registry to this project
+- `/validate` — verify all modules are correctly wired
+
+---
+
+## Composition Rules
+
+When making changes, follow these rules (from the modkit composition rulebook):
+
+- **Interface-first**: Application code depends on contracts, never on concrete implementations
+- **Constructor injection**: All modules receive dependencies via constructor, not globals
+- **Init order**: observability → error-tracking → cache → auth → remaining
+- **Config via env**: All config comes from environment variables loaded in `config.Load()`
+- **Response envelope**: All API responses use `{"data": ...}` or `{"error": ...}` format
+- **Context propagation**: Pass `context.Context` through all module calls
+- **Parameterized queries**: Never use string concatenation in SQL
+
+For the full rulebook: `~/.modkit/cache/orchestration/composition-rulebook.md`
