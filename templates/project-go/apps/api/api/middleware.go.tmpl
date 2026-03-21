@@ -2,12 +2,39 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	{{- if .HasModule "payments"}}
+	"io"
+	{{- end}}
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	contracts "github.com/dat2503/modkit/contracts/go"
 )
+
+// ── CORS middleware ───────────────────────────────────────────────────────────
+
+func corsMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := os.Getenv("CORS_ALLOWED_ORIGINS")
+			if origin == "" {
+				origin = "*"
+			}
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
 
 // ── Tracing middleware ────────────────────────────────────────────────────────
 
@@ -95,6 +122,7 @@ func authRequired(auth contracts.AuthService, next http.HandlerFunc) http.Handle
 }
 
 type contextKey string
+
 const contextKeyUser contextKey = "user"
 
 // UserFromContext extracts the authenticated user from the request context.
@@ -143,18 +171,18 @@ func clerkWebhookHandler(auth contracts.AuthService) http.HandlerFunc {
 
 // ── Response helpers ──────────────────────────────────────────────────────────
 
-// writeError writes a JSON error response.
+// writeError writes a JSON error response: {"error": {"message": "..."}}.
 func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	fmt.Fprintf(w, `{"error":{"message":%q}}`, msg)
 }
 
-// writeJSON writes a JSON success response wrapped in { "data": ... }.
+// writeJSON writes a JSON success response wrapped in {"data": ...}.
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	// TODO: use encoding/json to marshal v into { "data": v }
+	json.NewEncoder(w).Encode(map[string]any{"data": v})
 }
 
 // responseWriter wraps http.ResponseWriter to capture the status code.

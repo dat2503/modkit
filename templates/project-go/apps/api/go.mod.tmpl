@@ -2,9 +2,6 @@ module {{.GoModule}}
 
 go {{.GoVersion}}
 
-require (
-	github.com/dat2503/modkit v0.0.0  // replace with pinned version after scaffold
-)
+require github.com/dat2503/modkit v0.0.0
 
-// Module SDK dependencies are added by `go get` after scaffold.
-// Run: make deps
+replace github.com/dat2503/modkit v0.0.0 => {{.RegistryPath}}

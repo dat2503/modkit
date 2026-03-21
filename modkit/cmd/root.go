@@ -4,6 +4,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -11,6 +12,7 @@ import (
 var (
 	outputFormat string
 	noPrompt     bool
+	registryPath string
 )
 
 // rootCmd is the base command for the modkit CLI.
@@ -35,6 +37,12 @@ func Execute() {
 }
 
 func init() {
+	home, _ := os.UserHomeDir()
+	rootCmd.PersistentFlags().StringVar(
+		&registryPath, "registry",
+		filepath.Join(home, ".modkit", "cache"),
+		"Path to local registry root (default: ~/.modkit/cache)",
+	)
 	rootCmd.PersistentFlags().StringVarP(
 		&outputFormat, "output", "o", "table",
 		`Output format: "table" or "json"`,

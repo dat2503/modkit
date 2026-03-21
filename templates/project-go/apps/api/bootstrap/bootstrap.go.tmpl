@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"os"
 
-	// Module implementations — imported from modules/ directory
+	// Module implementations — copied from registry into modules/ during modkit init
 	{{- if .HasModule "observability"}}
 	obspkg "{{.GoModule}}/modules/observability"
 	{{- end}}
@@ -55,16 +55,25 @@ func Init(ctx context.Context) (http.Handler, func(context.Context), error) {
 
 	// ── 1. Observability (always first) ─────────────────────────────────────
 	{{- if .HasModule "observability"}}
-	obsSvc, err := obspkg.New(cfg.Observability)
+	obsSvc, err := obspkg.New(obspkg.Config{
+		ServiceName: cfg.Observability.ServiceName,
+		Endpoint:    cfg.Observability.Endpoint,
+		LogLevel:    cfg.Observability.LogLevel,
+		LogFormat:   cfg.Observability.LogFormat,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("init observability: %w", err)
 	}
-	shutdowns = append(shutdowns, obsSvc.Shutdown)
+	shutdowns = append(shutdowns, func(ctx context.Context) { obsSvc.Shutdown(ctx) })
 	{{- end}}
 
 	// ── 2. Error tracking (always second) ───────────────────────────────────
 	{{- if .HasModule "error-tracking"}}
-	errSvc, err := errpkg.New(cfg.ErrorTracking)
+	errSvc, err := errpkg.New(errpkg.Config{
+		SentryDSN:        cfg.ErrorTracking.SentryDSN,
+		Environment:      cfg.ErrorTracking.Environment,
+		TracesSampleRate: cfg.ErrorTracking.TracesSampleRate,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("init error-tracking: %w", err)
 	}
@@ -73,7 +82,10 @@ func Init(ctx context.Context) (http.Handler, func(context.Context), error) {
 
 	// ── 3. Cache (before auth and jobs) ─────────────────────────────────────
 	{{- if .HasModule "cache"}}
-	cacheSvc, err := cachepkg.New(cfg.Cache)
+	cacheSvc, err := cachepkg.New(cachepkg.Config{
+		URL:            cfg.Cache.RedisURL,
+		MaxConnections: cfg.Cache.MaxConnections,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("init cache: %w", err)
 	}
@@ -81,7 +93,11 @@ func Init(ctx context.Context) (http.Handler, func(context.Context), error) {
 
 	// ── 4. Auth (after cache) ────────────────────────────────────────────────
 	{{- if .HasModule "auth"}}
-	authSvc, err := authpkg.New(cfg.Auth, cacheSvc)
+	authSvc, err := authpkg.New(authpkg.Config{
+		SecretKey:      cfg.Auth.SecretKey,
+		PublishableKey: cfg.Auth.PublishableKey,
+		WebhookSecret:  cfg.Auth.WebhookSecret,
+	}, cacheSvc)
 	if err != nil {
 		return nil, nil, fmt.Errorf("init auth: %w", err)
 	}
@@ -89,28 +105,46 @@ func Init(ctx context.Context) (http.Handler, func(context.Context), error) {
 
 	// ── 5. Remaining modules ─────────────────────────────────────────────────
 	{{- if .HasModule "payments"}}
-	paymentsSvc, err := paymentspkg.New(cfg.Payments)
+	paymentsSvc, err := paymentspkg.New(paymentspkg.Config{
+		SecretKey:     cfg.Payments.SecretKey,
+		WebhookSecret: cfg.Payments.WebhookSecret,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("init payments: %w", err)
 	}
 	{{- end}}
 
 	{{- if .HasModule "email"}}
-	emailSvc, err := emailpkg.New(cfg.Email)
+	emailSvc, err := emailpkg.New(emailpkg.Config{
+		APIKey:      cfg.Email.APIKey,
+		FromDefault: cfg.Email.FromDefault,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("init email: %w", err)
 	}
 	{{- end}}
 
 	{{- if .HasModule "storage"}}
-	storageSvc, err := storagepkg.New(cfg.Storage)
+	storageSvc, err := storagepkg.New(storagepkg.Config{
+		Bucket:          cfg.Storage.Bucket,
+		Region:          cfg.Storage.Region,
+		AccessKeyID:     cfg.Storage.AccessKeyID,
+		SecretAccessKey: cfg.Storage.SecretAccessKey,
+		Endpoint:        cfg.Storage.Endpoint,
+		PublicBaseURL:   cfg.Storage.PublicBaseURL,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("init storage: %w", err)
 	}
 	{{- end}}
 
 	{{- if .HasModule "jobs"}}
-	jobsSvc, err := jobspkg.New(cfg.Jobs, cacheSvc)
+	jobsSvc, err := jobspkg.New(jobspkg.Config{
+		RedisURL:     cfg.Cache.RedisURL,
+		Concurrency:  cfg.Jobs.Concurrency,
+		MaxRetries:   cfg.Jobs.MaxRetries,
+		DefaultQueue: cfg.Jobs.DefaultQueue,
+	}, cacheSvc)
 	if err != nil {
 		return nil, nil, fmt.Errorf("init jobs: %w", err)
 	}
