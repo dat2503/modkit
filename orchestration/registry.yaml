@@ -1,0 +1,507 @@
+# Module Registry v1.0
+# Master index of all available modules.
+# Agents read this file to understand what's available.
+#
+# phase: mvp   — include in MVP scaffold by default rules
+# phase: v2    — available but not included in MVP by default
+# phase: later — not yet implemented, coming soon
+
+# ─────────────────────────────────────────
+# RUNTIMES
+# ─────────────────────────────────────────
+
+runtimes:
+  - name: go
+    label: "Go"
+    phase: mvp
+    template: templates/project-go
+    contracts: contracts/go
+    build_cmd: "go build ./..."
+    test_cmd: "go test ./..."
+    lint_cmd: "golangci-lint run"
+    docker_base: "golang:1.22-alpine"
+    go_version: "1.22"
+    notes: "Recommended for performance-critical backends and teams with Go experience"
+
+  - name: bun
+    label: "Bun (TypeScript)"
+    phase: mvp
+    template: templates/project-bun
+    contracts: contracts/ts
+    build_cmd: "bun build"
+    test_cmd: "bun test"
+    lint_cmd: "bunx eslint . --ext .ts"
+    docker_base: "oven/bun:1.1-alpine"
+    bun_version: "1.1"
+    notes: "Recommended for teams preferring TypeScript end-to-end (shared types with frontend)"
+
+# ─────────────────────────────────────────
+# MODULES
+# ─────────────────────────────────────────
+
+modules:
+
+  # ── ALWAYS INCLUDED ────────────────────
+
+  - name: observability
+    category: observability
+    phase: mvp
+    always_include: true
+    description: >
+      Distributed tracing, structured logging, and metrics via OpenTelemetry.
+      Wraps all module calls and HTTP handlers. Must be initialized first.
+    interface_go: contracts/go/observability.go
+    interface_ts: contracts/ts/observability.ts
+    config_schema: modules/observability/config.schema.json
+    agent_docs: modules/observability/docs/AGENT.md
+    default_impl: otel
+    status: stable
+    dependencies:
+      required: []
+      optional: []
+    implementations:
+      - name: otel
+        label: "OpenTelemetry"
+        runtimes:
+          go: modules/observability/impl/otel-go
+          bun: modules/observability/impl/otel-ts
+
+  - name: error-tracking
+    category: error-tracking
+    phase: mvp
+    always_include: true
+    description: >
+      Error and exception tracking with context, stack traces, and alerting.
+      Reports unhandled errors to the configured provider. Must be initialized second.
+    interface_go: contracts/go/errors.go
+    interface_ts: contracts/ts/errors.ts
+    config_schema: modules/error-tracking/config.schema.json
+    agent_docs: modules/error-tracking/docs/AGENT.md
+    default_impl: sentry
+    status: stable
+    dependencies:
+      required: [observability]
+      optional: []
+    implementations:
+      - name: sentry
+        label: "Sentry"
+        runtimes:
+          go: modules/error-tracking/impl/sentry-go
+          bun: modules/error-tracking/impl/sentry-ts
+
+  # ── MVP MODULES ─────────────────────────
+
+  - name: auth
+    category: auth
+    phase: mvp
+    always_include: false
+    description: >
+      User authentication and session management. Handles sign-in, sign-up,
+      JWT validation, and user identity. Delegates to a third-party provider —
+      never stores passwords.
+    interface_go: contracts/go/auth.go
+    interface_ts: contracts/ts/auth.ts
+    config_schema: modules/auth/config.schema.json
+    agent_docs: modules/auth/docs/AGENT.md
+    default_impl: clerk
+    status: stable
+    dependencies:
+      required: [cache]
+      optional: [observability]
+    include_when:
+      - "app has user accounts"
+      - "any route requires authentication"
+    implementations:
+      - name: clerk
+        label: "Clerk"
+        runtimes:
+          go: modules/auth/impl/clerk-go
+          bun: modules/auth/impl/clerk-ts
+        notes: "Recommended. Managed auth with UI components."
+      - name: privy
+        label: "Privy"
+        runtimes:
+          go: modules/auth/impl/privy-go
+          bun: modules/auth/impl/privy-ts
+        notes: "Good for web3/wallet-based auth."
+        phase: v2
+
+  - name: payments
+    category: payments
+    phase: mvp
+    always_include: false
+    description: >
+      Payment processing for one-time and recurring payments. Handles checkout
+      sessions, webhook events, and customer management. Never store card data.
+    interface_go: contracts/go/payments.go
+    interface_ts: contracts/ts/payments.ts
+    config_schema: modules/payments/config.schema.json
+    agent_docs: modules/payments/docs/AGENT.md
+    default_impl: stripe
+    status: stable
+    dependencies:
+      required: []
+      optional: [observability, error-tracking]
+    include_when:
+      - "app processes payments"
+      - "subscription model"
+      - "one-time purchases"
+    implementations:
+      - name: stripe
+        label: "Stripe"
+        runtimes:
+          go: modules/payments/impl/stripe-go
+          bun: modules/payments/impl/stripe-ts
+        notes: "Default. Industry standard, excellent webhook support."
+
+  - name: email
+    category: notification
+    phase: mvp
+    always_include: false
+    description: >
+      Transactional email delivery. Send and track delivery of emails triggered
+      by user actions (confirmations, notifications, invoices). Not for marketing bulk email.
+    interface_go: contracts/go/email.go
+    interface_ts: contracts/ts/email.ts
+    config_schema: modules/email/config.schema.json
+    agent_docs: modules/email/docs/AGENT.md
+    default_impl: resend
+    status: stable
+    dependencies:
+      required: []
+      optional: [jobs, observability]
+    include_when:
+      - "app sends transactional emails"
+      - "user confirmation flows"
+      - "notification emails"
+    implementations:
+      - name: resend
+        label: "Resend"
+        runtimes:
+          go: modules/email/impl/resend-go
+          bun: modules/email/impl/resend-ts
+        notes: "Default. Developer-friendly, excellent deliverability."
+      - name: sendgrid
+        label: "SendGrid"
+        runtimes:
+          go: modules/email/impl/sendgrid-go
+          bun: modules/email/impl/sendgrid-ts
+        notes: "Alternative. Better for high-volume or teams already using Twilio."
+        phase: v2
+
+  - name: storage
+    category: storage
+    phase: mvp
+    always_include: false
+    description: >
+      Object storage for files, images, documents, and generated assets.
+      Provides upload, download, signed URLs, and deletion.
+    interface_go: contracts/go/storage.go
+    interface_ts: contracts/ts/storage.ts
+    config_schema: modules/storage/config.schema.json
+    agent_docs: modules/storage/docs/AGENT.md
+    default_impl: s3
+    status: stable
+    dependencies:
+      required: []
+      optional: [observability]
+    include_when:
+      - "app handles file uploads"
+      - "app generates downloadable files (PDFs, exports)"
+      - "user avatars or media"
+    implementations:
+      - name: s3
+        label: "AWS S3"
+        runtimes:
+          go: modules/storage/impl/s3-go
+          bun: modules/storage/impl/s3-ts
+        notes: "Default. Also compatible with Cloudflare R2, MinIO (S3-compatible)."
+
+  - name: cache
+    category: cache
+    phase: mvp
+    always_include: false
+    description: >
+      Key-value cache for sessions, rate limiting, hot data, and deduplication.
+      Required by auth (session storage) and jobs (queue backend).
+    interface_go: contracts/go/cache.go
+    interface_ts: contracts/ts/cache.ts
+    config_schema: modules/cache/config.schema.json
+    agent_docs: modules/cache/docs/AGENT.md
+    default_impl: redis
+    status: stable
+    dependencies:
+      required: []
+      optional: []
+    include_when:
+      - "auth module is included (required)"
+      - "jobs module is included (required)"
+      - "app has sessions"
+      - "rate limiting needed"
+      - "frequently-read, rarely-written data"
+    implementations:
+      - name: redis
+        label: "Redis"
+        runtimes:
+          go: modules/cache/impl/redis-go
+          bun: modules/cache/impl/redis-ts
+        notes: "Default. Use Redis 7+."
+
+  - name: jobs
+    category: jobs
+    phase: mvp
+    always_include: false
+    description: >
+      Background job queue for async processing, retries, and scheduled tasks.
+      Use for any operation > 500ms, any operation needing retry logic,
+      or any side effect that doesn't need to block the HTTP response.
+    interface_go: contracts/go/jobs.go
+    interface_ts: contracts/ts/jobs.ts
+    config_schema: modules/jobs/config.schema.json
+    agent_docs: modules/jobs/docs/AGENT.md
+    default_impl_go: asynq
+    default_impl_bun: bullmq
+    status: stable
+    dependencies:
+      required: [cache]
+      optional: [observability, error-tracking]
+    include_when:
+      - "app sends emails (pair with email module)"
+      - "app generates files (PDFs, exports)"
+      - "any operation > 500ms"
+      - "operations needing retry logic"
+    implementations:
+      - name: asynq
+        label: "Asynq (Go only)"
+        runtimes:
+          go: modules/jobs/impl/asynq-go
+        notes: "Default for Go runtime. Redis-backed, reliable."
+      - name: bullmq
+        label: "BullMQ (Bun only)"
+        runtimes:
+          bun: modules/jobs/impl/bullmq-ts
+        notes: "Default for Bun runtime. Redis-backed, feature-rich."
+
+  # ── V2 MODULES ──────────────────────────
+
+  - name: realtime
+    category: realtime
+    phase: v2
+    always_include: false
+    description: >
+      Real-time bidirectional communication via WebSockets. Publish events from
+      server (payment received, status changed), subscribe on client.
+      Requires auth and cache modules.
+    interface_go: contracts/go/realtime.go
+    interface_ts: contracts/ts/realtime.ts
+    config_schema: modules/realtime/config.schema.json
+    agent_docs: modules/realtime/docs/AGENT.md
+    default_impl: websocket
+    status: stable
+    dependencies:
+      required: [cache, auth]
+      optional: [observability]
+    include_when:
+      - "brief explicitly mentions live/real-time updates"
+      - "dashboard needs to reflect changes without page refresh"
+    implementations:
+      - name: websocket
+        label: "WebSocket (native)"
+        runtimes:
+          go: modules/realtime/impl/websocket-go
+          bun: modules/realtime/impl/websocket-ts
+        notes: "Default. No external service required."
+
+  - name: search
+    category: search
+    phase: v2
+    always_include: false
+    description: >
+      Full-text search and filtering over large datasets. Use when Postgres
+      ILIKE queries are insufficient — typically > 100k records or complex
+      multi-field relevance ranking needed.
+    interface_go: contracts/go/search.go
+    interface_ts: contracts/ts/search.ts
+    config_schema: modules/search/config.schema.json
+    agent_docs: modules/search/docs/AGENT.md
+    default_impl: elasticsearch
+    status: stable
+    dependencies:
+      required: []
+      optional: [observability]
+    include_when:
+      - "brief mentions search functionality with relevance ranking"
+      - "filtering across many records (> 100k) by multiple fields"
+    implementations:
+      - name: elasticsearch
+        label: "Elasticsearch"
+        runtimes:
+          go: modules/search/impl/elasticsearch-go
+          bun: modules/search/impl/elasticsearch-ts
+
+  - name: feature-flags
+    category: feature-flags
+    phase: v2
+    always_include: false
+    description: >
+      Feature flag management for phased rollouts, A/B testing, and kill switches.
+      Gate features behind flags that can be toggled without a deploy.
+    interface_go: contracts/go/feature_flags.go
+    interface_ts: contracts/ts/feature-flags.ts
+    config_schema: modules/feature-flags/config.schema.json
+    agent_docs: modules/feature-flags/docs/AGENT.md
+    default_impl: flagsmith
+    status: stable
+    dependencies:
+      required: []
+      optional: [cache]
+    include_when:
+      - "brief mentions phased rollout"
+      - "A/B testing needed"
+      - "features need to be toggled without deploy"
+    implementations:
+      - name: flagsmith
+        label: "Flagsmith"
+        runtimes:
+          go: modules/feature-flags/impl/flagsmith-go
+          bun: modules/feature-flags/impl/flagsmith-ts
+        notes: "Default. Open source, can self-host."
+
+  # ── INFRASTRUCTURE MODULES ──────────────
+
+  - name: cicd
+    category: cicd
+    phase: mvp
+    always_include: false
+    description: >
+      CI/CD pipeline configuration. Generates GitHub Actions workflows for
+      build, test, lint, staging deploy, and production deploy.
+      Generated automatically by 'modkit init'.
+    interface_go: contracts/go/cicd.go
+    interface_ts: contracts/ts/cicd.ts
+    config_schema: modules/cicd/config.schema.json
+    agent_docs: modules/cicd/docs/AGENT.md
+    default_impl: github-actions
+    status: stable
+    dependencies:
+      required: []
+      optional: []
+    implementations:
+      - name: github-actions
+        label: "GitHub Actions"
+        runtimes:
+          go: modules/cicd/impl/github-actions-go
+          bun: modules/cicd/impl/github-actions-ts
+        notes: "Default. Generates .github/workflows/ directory."
+
+# ─────────────────────────────────────────
+# COMPOSITION RULES
+# ─────────────────────────────────────────
+
+composition_rules:
+
+  # Initialization order
+  - id: init-order-observability
+    phase: mvp
+    rule: "observability must be initialized first, before all other modules"
+    severity: error
+
+  - id: init-order-error-tracking
+    phase: mvp
+    rule: "error-tracking must be initialized second, immediately after observability"
+    severity: error
+
+  - id: init-order-cache-before-auth
+    phase: mvp
+    rule: "cache must be initialized before auth (auth requires cache for session storage)"
+    severity: error
+
+  - id: init-order-cache-before-jobs
+    phase: mvp
+    rule: "cache must be initialized before jobs (jobs requires cache as queue backend)"
+    severity: error
+
+  - id: init-order-auth-before-realtime
+    phase: v2
+    rule: "auth must be initialized before realtime (WebSocket connections require auth)"
+    severity: error
+
+  # Interface rules
+  - id: interface-first
+    phase: mvp
+    rule: "all application code must depend on module interfaces, never on concrete implementations"
+    severity: error
+
+  - id: constructor-injection
+    phase: mvp
+    rule: "all module instances must be injected via constructor, never via global variables"
+    severity: error
+
+  - id: context-first-param-go
+    phase: mvp
+    rule: "all module methods must accept context.Context as their first parameter (Go)"
+    severity: error
+
+  - id: async-return-ts
+    phase: mvp
+    rule: "all module methods must be async and return Promise<T> (TypeScript)"
+    severity: error
+
+  - id: result-error-tuple-go
+    phase: mvp
+    rule: "all module methods must return (result, error) tuple (Go)"
+    severity: error
+
+  # Always-included modules
+  - id: always-include-observability
+    phase: mvp
+    rule: "observability module must always be included regardless of module selection"
+    severity: error
+
+  - id: always-include-error-tracking
+    phase: mvp
+    rule: "error-tracking module must always be included regardless of module selection"
+    severity: error
+
+  # Config rules
+  - id: config-via-constructor
+    phase: mvp
+    rule: "config is injected via constructor, never read from environment directly in module code"
+    severity: error
+
+  - id: no-secrets-in-code
+    phase: mvp
+    rule: "API keys, secrets, and credentials must come from environment variables, never hardcoded"
+    severity: error
+
+  # Communication rules
+  - id: openapi-spec-first
+    phase: mvp
+    rule: "OpenAPI spec must be written before handlers — generate server stubs from spec"
+    severity: warning
+
+  - id: response-envelope
+    phase: mvp
+    rule: "all API responses must be wrapped in { data: ... } for success or { error: ... } for failure"
+    severity: error
+
+  # Database rules
+  - id: uuid-primary-keys
+    phase: mvp
+    rule: "all new tables must use UUID primary keys (gen_random_uuid()), never integer sequences"
+    severity: warning
+
+  - id: timestamps-required
+    phase: mvp
+    rule: "all tables must have created_at and updated_at TIMESTAMPTZ columns"
+    severity: error
+
+  - id: soft-deletes
+    phase: mvp
+    rule: "user-generated content must use soft deletes (deleted_at column), never hard DELETE"
+    severity: warning
+
+  - id: parameterized-queries
+    phase: mvp
+    rule: "all database queries must use parameterized inputs, never string concatenation"
+    severity: error
