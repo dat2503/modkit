@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "STORAGE_PROVIDER": {
+      "type": "string",
+      "enum": ["s3"],
+      "description": "Object storage provider"
+    },
+    "STORAGE_BUCKET": {
+      "type": "string",
+      "description": "S3 bucket name"
+    },
+    "STORAGE_REGION": {
+      "type": "string",
+      "description": "AWS region (e.g. us-east-1). For Cloudflare R2, use 'auto'."
+    },
+    "STORAGE_ACCESS_KEY_ID": {
+      "type": "string",
+      "description": "AWS access key ID",
+      "sensitive": true
+    },
+    "STORAGE_SECRET_ACCESS_KEY": {
+      "type": "string",
+      "description": "AWS secret access key",
+      "sensitive": true
+    },
+    "STORAGE_ENDPOINT": {
+      "type": "string",
+      "description": "Custom endpoint URL for S3-compatible providers (e.g. Cloudflare R2, MinIO). Leave empty for AWS S3."
+    },
+    "STORAGE_PUBLIC_BASE_URL": {
+      "type": "string",
+      "description": "Base URL for public objects (e.g. https://assets.yourapp.com). Used by publicUrl()."
+    }
+  },
+  "required": ["STORAGE_PROVIDER", "STORAGE_BUCKET", "STORAGE_REGION", "STORAGE_ACCESS_KEY_ID", "STORAGE_SECRET_ACCESS_KEY"]
+}

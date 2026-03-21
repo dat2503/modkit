@@ -1,0 +1,34 @@
+name: "storage"
+version: "1.0.0"
+description: "Object storage for files, images, documents, and generated assets. Provides upload, download, signed URLs, and deletion."
+category: "storage"
+phase: "mvp"
+always_include: false
+
+interface_go: "contracts/go/storage.go"
+interface_ts: "contracts/ts/storage.ts"
+
+config_schema: "modules/storage/config.schema.json"
+agent_docs: "modules/storage/docs/AGENT.md"
+
+default_impl: "s3"
+
+dependencies:
+  required: []
+  optional:
+    - observability
+
+include_when:
+  - "app handles file uploads"
+  - "app generates downloadable files (PDFs, exports, reports)"
+  - "user avatars or profile images"
+  - "app stores media (images, videos)"
+
+implementations:
+  - name: s3
+    label: "AWS S3"
+    phase: mvp
+    runtimes:
+      go: "modules/storage/impl/s3-go"
+      bun: "modules/storage/impl/s3-ts"
+    notes: "Default. Also compatible with Cloudflare R2 and MinIO (both S3-compatible)."

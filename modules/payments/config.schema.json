@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "PAYMENTS_PROVIDER": {
+      "type": "string",
+      "enum": ["stripe"],
+      "description": "Payment provider to use"
+    },
+    "STRIPE_SECRET_KEY": {
+      "type": "string",
+      "description": "Stripe secret key (sk_live_... or sk_test_...)",
+      "sensitive": true
+    },
+    "STRIPE_PUBLISHABLE_KEY": {
+      "type": "string",
+      "description": "Stripe publishable key (pk_live_... or pk_test_...)"
+    },
+    "STRIPE_WEBHOOK_SECRET": {
+      "type": "string",
+      "description": "Webhook signing secret for verifying Stripe webhook payloads",
+      "sensitive": true
+    }
+  },
+  "required": ["PAYMENTS_PROVIDER", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]
+}

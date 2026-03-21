@@ -1,0 +1,30 @@
+name: "observability"
+version: "1.0.0"
+description: "Distributed tracing, structured logging, and metrics via OpenTelemetry. Wraps all module calls and HTTP handlers. Must be initialized first."
+category: "observability"
+phase: "mvp"
+always_include: true
+
+interface_go: "contracts/go/observability.go"
+interface_ts: "contracts/ts/observability.ts"
+
+config_schema: "modules/observability/config.schema.json"
+agent_docs: "modules/observability/docs/AGENT.md"
+
+default_impl: "otel"
+
+dependencies:
+  required: []
+  optional: []
+
+include_when:
+  - "always — non-negotiable"
+
+implementations:
+  - name: otel
+    label: "OpenTelemetry"
+    phase: mvp
+    runtimes:
+      go: "modules/observability/impl/otel-go"
+      bun: "modules/observability/impl/otel-ts"
+    notes: "Default. Vendor-neutral. Export to any OTLP-compatible backend (Jaeger, Honeycomb, Datadog, etc.)"

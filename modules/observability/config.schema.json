@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "OTEL_SERVICE_NAME": {
+      "type": "string",
+      "description": "Service name as it appears in traces and metrics (e.g. 'invoicely-api')"
+    },
+    "OTEL_EXPORTER_OTLP_ENDPOINT": {
+      "type": "string",
+      "description": "OTLP exporter endpoint (e.g. http://localhost:4317 for local Jaeger, or your cloud provider endpoint)"
+    },
+    "OTEL_EXPORTER_OTLP_HEADERS": {
+      "type": "string",
+      "description": "Headers for authenticated OTLP endpoints (e.g. 'x-honeycomb-team=your-key')",
+      "sensitive": true
+    },
+    "LOG_LEVEL": {
+      "type": "string",
+      "enum": ["debug", "info", "warn", "error"],
+      "description": "Minimum log level to emit",
+      "default": "info"
+    },
+    "LOG_FORMAT": {
+      "type": "string",
+      "enum": ["json", "text"],
+      "description": "Log output format. Use 'json' in production, 'text' for local development.",
+      "default": "json"
+    }
+  },
+  "required": ["OTEL_SERVICE_NAME"]
+}

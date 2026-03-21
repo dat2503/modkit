@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "JOBS_PROVIDER": {
+      "type": "string",
+      "enum": ["asynq", "bullmq"],
+      "description": "Job queue provider. Use 'asynq' for Go runtime, 'bullmq' for Bun runtime."
+    },
+    "JOBS_CONCURRENCY": {
+      "type": "integer",
+      "description": "Number of jobs to process concurrently per worker. Default: 10.",
+      "default": 10
+    },
+    "JOBS_DEFAULT_QUEUE": {
+      "type": "string",
+      "description": "Name of the default queue. Default: 'default'.",
+      "default": "default"
+    },
+    "JOBS_MAX_RETRIES": {
+      "type": "integer",
+      "description": "Maximum number of retry attempts for failed jobs. Default: 3.",
+      "default": 3
+    }
+  },
+  "required": ["JOBS_PROVIDER"],
+  "notes": "REDIS_URL from the cache module is reused as the queue backend — no separate Redis needed."
+}

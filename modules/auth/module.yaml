@@ -1,0 +1,41 @@
+name: "auth"
+version: "1.0.0"
+description: "User authentication and session management. Handles sign-in, sign-up, JWT validation, and user identity. Delegates to a third-party provider — never stores passwords."
+category: "auth"
+phase: "mvp"
+always_include: false
+
+interface_go: "contracts/go/auth.go"
+interface_ts: "contracts/ts/auth.ts"
+
+config_schema: "modules/auth/config.schema.json"
+agent_docs: "modules/auth/docs/AGENT.md"
+
+default_impl: "clerk"
+
+dependencies:
+  required:
+    - cache
+  optional:
+    - observability
+
+include_when:
+  - "app has user accounts"
+  - "any route requires authentication"
+  - "app has sign-in or sign-up flows"
+
+implementations:
+  - name: clerk
+    label: "Clerk"
+    phase: mvp
+    runtimes:
+      go: "modules/auth/impl/clerk-go"
+      bun: "modules/auth/impl/clerk-ts"
+    notes: "Recommended. Managed auth with UI components, webhooks, and organizations."
+  - name: privy
+    label: "Privy"
+    phase: v2
+    runtimes:
+      go: "modules/auth/impl/privy-go"
+      bun: "modules/auth/impl/privy-ts"
+    notes: "Use for web3/wallet-based auth."

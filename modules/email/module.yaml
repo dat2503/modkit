@@ -1,0 +1,42 @@
+name: "email"
+version: "1.0.0"
+description: "Transactional email delivery. Send and track emails triggered by user actions (confirmations, notifications, invoices). Not for marketing bulk email."
+category: "notification"
+phase: "mvp"
+always_include: false
+
+interface_go: "contracts/go/email.go"
+interface_ts: "contracts/ts/email.ts"
+
+config_schema: "modules/email/config.schema.json"
+agent_docs: "modules/email/docs/AGENT.md"
+
+default_impl: "resend"
+
+dependencies:
+  required: []
+  optional:
+    - jobs
+    - observability
+
+include_when:
+  - "app sends transactional emails"
+  - "user confirmation or welcome emails"
+  - "password reset or magic link emails"
+  - "notification emails (invoice sent, payment received)"
+
+implementations:
+  - name: resend
+    label: "Resend"
+    phase: mvp
+    runtimes:
+      go: "modules/email/impl/resend-go"
+      bun: "modules/email/impl/resend-ts"
+    notes: "Default. Developer-friendly API, excellent deliverability, React Email support."
+  - name: sendgrid
+    label: "SendGrid"
+    phase: v2
+    runtimes:
+      go: "modules/email/impl/sendgrid-go"
+      bun: "modules/email/impl/sendgrid-ts"
+    notes: "Alternative. Better for high-volume or teams already using Twilio."

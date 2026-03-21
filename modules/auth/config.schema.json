@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "AUTH_PROVIDER": {
+      "type": "string",
+      "enum": ["clerk", "privy"],
+      "description": "Auth provider to use"
+    },
+    "CLERK_SECRET_KEY": {
+      "type": "string",
+      "description": "Clerk secret key (sk_live_... or sk_test_...)",
+      "sensitive": true
+    },
+    "CLERK_PUBLISHABLE_KEY": {
+      "type": "string",
+      "description": "Clerk publishable key (pk_live_... or pk_test_...)"
+    },
+    "CLERK_WEBHOOK_SECRET": {
+      "type": "string",
+      "description": "Webhook signing secret for verifying Clerk webhook payloads",
+      "sensitive": true
+    }
+  },
+  "required": ["AUTH_PROVIDER", "CLERK_SECRET_KEY", "CLERK_PUBLISHABLE_KEY"]
+}

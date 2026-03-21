@@ -1,0 +1,34 @@
+name: "cache"
+version: "1.0.0"
+description: "Key-value cache for sessions, rate limiting, hot data, and deduplication. Required by the auth module (session storage) and jobs module (queue backend)."
+category: "cache"
+phase: "mvp"
+always_include: false
+
+interface_go: "contracts/go/cache.go"
+interface_ts: "contracts/ts/cache.ts"
+
+config_schema: "modules/cache/config.schema.json"
+agent_docs: "modules/cache/docs/AGENT.md"
+
+default_impl: "redis"
+
+dependencies:
+  required: []
+  optional: []
+
+include_when:
+  - "auth module is included (required dependency)"
+  - "jobs module is included (required dependency)"
+  - "app has user sessions"
+  - "rate limiting is needed"
+  - "frequently-read, rarely-written data (dashboard stats, config)"
+
+implementations:
+  - name: redis
+    label: "Redis"
+    phase: mvp
+    runtimes:
+      go: "modules/cache/impl/redis-go"
+      bun: "modules/cache/impl/redis-ts"
+    notes: "Default. Use Redis 7+. Redis Cloud free tier sufficient for MVP."

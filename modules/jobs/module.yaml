@@ -1,0 +1,43 @@
+name: "jobs"
+version: "1.0.0"
+description: "Background job queue for async processing, retries, and scheduled tasks. Use for any operation >500ms, any operation needing retry logic, or any side effect that doesn't need to block the HTTP response."
+category: "jobs"
+phase: "mvp"
+always_include: false
+
+interface_go: "contracts/go/jobs.go"
+interface_ts: "contracts/ts/jobs.ts"
+
+config_schema: "modules/jobs/config.schema.json"
+agent_docs: "modules/jobs/docs/AGENT.md"
+
+default_impl_go: "asynq"
+default_impl_bun: "bullmq"
+
+dependencies:
+  required:
+    - cache
+  optional:
+    - observability
+    - error-tracking
+
+include_when:
+  - "app sends emails (pair with email module)"
+  - "app generates files (PDFs, exports, reports)"
+  - "any operation >500ms that blocks HTTP response"
+  - "operations needing retry logic"
+  - "scheduled/recurring tasks"
+
+implementations:
+  - name: asynq
+    label: "Asynq (Go only)"
+    phase: mvp
+    runtimes:
+      go: "modules/jobs/impl/asynq-go"
+    notes: "Default for Go runtime. Redis-backed, reliable, supports scheduling."
+  - name: bullmq
+    label: "BullMQ (Bun only)"
+    phase: mvp
+    runtimes:
+      bun: "modules/jobs/impl/bullmq-ts"
+    notes: "Default for Bun runtime. Redis-backed, feature-rich, dashboard available."

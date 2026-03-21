@@ -1,0 +1,48 @@
+import type { IJobsService, JobHandle, JobHandler, JobOptions } from '../../../contracts/ts/jobs'
+
+export interface BullMQConfig {
+  /** Redis URL — reuse the cache module's REDIS_URL. */
+  redisUrl: string
+  concurrency?: number
+  maxRetries?: number
+  defaultQueue?: string
+}
+
+/**
+ * BullMQJobsService implements IJobsService using BullMQ (Bun only).
+ * Uses Redis as the queue backend — reuse the cache module's Redis instance.
+ */
+export class BullMQJobsService implements IJobsService {
+  private readonly handlers = new Map<string, JobHandler>()
+
+  constructor(private readonly config: BullMQConfig) {}
+
+  async enqueue(jobType: string, payload: unknown, opts?: JobOptions): Promise<JobHandle> {
+    // TODO: implement using bullmq Queue.add(jobType, payload, opts)
+    throw new Error('not implemented')
+  }
+
+  async enqueueIn(jobType: string, payload: unknown, delayMs: number, opts?: JobOptions): Promise<JobHandle> {
+    // TODO: implement using bullmq Queue.add with { delay: delayMs }
+    throw new Error('not implemented')
+  }
+
+  async enqueueAt(jobType: string, payload: unknown, processAt: Date, opts?: JobOptions): Promise<JobHandle> {
+    const delayMs = processAt.getTime() - Date.now()
+    return this.enqueueIn(jobType, payload, Math.max(0, delayMs), opts)
+  }
+
+  registerHandler(jobType: string, handler: JobHandler): void {
+    this.handlers.set(jobType, handler)
+  }
+
+  async start(): Promise<void> {
+    // TODO: implement using bullmq Worker with registered handlers
+    throw new Error('not implemented')
+  }
+
+  async stop(): Promise<void> {
+    // TODO: implement graceful Worker close
+    throw new Error('not implemented')
+  }
+}

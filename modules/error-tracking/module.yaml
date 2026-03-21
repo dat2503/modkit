@@ -1,0 +1,31 @@
+name: "error-tracking"
+version: "1.0.0"
+description: "Error and exception tracking with context, stack traces, and alerting. Reports unhandled errors to the configured provider. Must be initialized second."
+category: "error-tracking"
+phase: "mvp"
+always_include: true
+
+interface_go: "contracts/go/errors.go"
+interface_ts: "contracts/ts/errors.ts"
+
+config_schema: "modules/error-tracking/config.schema.json"
+agent_docs: "modules/error-tracking/docs/AGENT.md"
+
+default_impl: "sentry"
+
+dependencies:
+  required:
+    - observability
+  optional: []
+
+include_when:
+  - "always — non-negotiable"
+
+implementations:
+  - name: sentry
+    label: "Sentry"
+    phase: mvp
+    runtimes:
+      go: "modules/error-tracking/impl/sentry-go"
+      bun: "modules/error-tracking/impl/sentry-ts"
+    notes: "Default. Generous free tier (5k errors/month), excellent Go and TypeScript SDKs."

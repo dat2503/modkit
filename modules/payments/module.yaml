@@ -1,0 +1,35 @@
+name: "payments"
+version: "1.0.0"
+description: "Payment processing for one-time and recurring payments. Handles checkout sessions, webhook events, and customer management. Never store card data."
+category: "payments"
+phase: "mvp"
+always_include: false
+
+interface_go: "contracts/go/payments.go"
+interface_ts: "contracts/ts/payments.ts"
+
+config_schema: "modules/payments/config.schema.json"
+agent_docs: "modules/payments/docs/AGENT.md"
+
+default_impl: "stripe"
+
+dependencies:
+  required: []
+  optional:
+    - observability
+    - error-tracking
+
+include_when:
+  - "app processes payments"
+  - "subscription model"
+  - "one-time purchases"
+  - "freemium with paid tiers"
+
+implementations:
+  - name: stripe
+    label: "Stripe"
+    phase: mvp
+    runtimes:
+      go: "modules/payments/impl/stripe-go"
+      bun: "modules/payments/impl/stripe-ts"
+    notes: "Default. Industry standard, excellent webhook support, global coverage."

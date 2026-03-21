@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "EMAIL_PROVIDER": {
+      "type": "string",
+      "enum": ["resend", "sendgrid"],
+      "description": "Email service provider"
+    },
+    "EMAIL_API_KEY": {
+      "type": "string",
+      "description": "API key for the email provider",
+      "sensitive": true
+    },
+    "EMAIL_FROM_DEFAULT": {
+      "type": "string",
+      "format": "email",
+      "description": "Default from address (e.g. noreply@yourapp.com). Must be a verified domain."
+    }
+  },
+  "required": ["EMAIL_PROVIDER", "EMAIL_API_KEY", "EMAIL_FROM_DEFAULT"]
+}

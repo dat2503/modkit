@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "CACHE_PROVIDER": {
+      "type": "string",
+      "enum": ["redis"],
+      "description": "Cache provider to use"
+    },
+    "REDIS_URL": {
+      "type": "string",
+      "description": "Redis connection URL (redis://localhost:6379 or rediss://... for TLS)",
+      "sensitive": true
+    },
+    "REDIS_MAX_CONNECTIONS": {
+      "type": "integer",
+      "description": "Maximum number of connections in the pool. Default: 10.",
+      "default": 10
+    }
+  },
+  "required": ["CACHE_PROVIDER", "REDIS_URL"]
+}
