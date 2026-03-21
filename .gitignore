@@ -1,0 +1,46 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+modkit/modkit
+modkit/bin/
+
+# Go
+*.test
+*.out
+vendor/
+go.sum
+
+# Node / Bun
+node_modules/
+.next/
+dist/
+.turbo/
+bun.lockb
+*.lock
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Generated
+gen/
+*.pb.go
+*.gen.go
+apps/web/lib/api.types.ts
+
+# Docker
+docker-compose.override.yml
+
+# Registry cache (for local testing)
+.modkit-test-cache/
