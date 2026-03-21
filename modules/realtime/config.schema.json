@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "REALTIME_PROVIDER": {
+      "type": "string",
+      "enum": ["websocket"],
+      "description": "Realtime provider to use"
+    },
+    "REALTIME_MAX_CONNECTIONS_PER_USER": {
+      "type": "integer",
+      "description": "Maximum concurrent WebSocket connections per user. Default: 5.",
+      "default": 5
+    },
+    "REALTIME_PING_INTERVAL_SECONDS": {
+      "type": "integer",
+      "description": "WebSocket ping interval in seconds to detect dead connections. Default: 30.",
+      "default": 30
+    }
+  },
+  "required": ["REALTIME_PROVIDER"]
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "CICD_PROVIDER": {
+      "type": "string",
+      "enum": ["github-actions"],
+      "description": "CI/CD provider to use"
+    }
+  },
+  "required": ["CICD_PROVIDER"],
+  "notes": "Workflow files are generated at project scaffold time. All secrets (deploy keys, registry credentials) are stored as GitHub Actions secrets, not in .env."
+}

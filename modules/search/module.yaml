@@ -1,0 +1,34 @@
+name: "search"
+version: "1.0.0"
+description: "Full-text search and filtering over large datasets. Use when Postgres ILIKE queries are insufficient — typically >100k records or complex multi-field relevance ranking needed."
+category: "search"
+phase: "v2"
+always_include: false
+
+interface_go: "contracts/go/search.go"
+interface_ts: "contracts/ts/search.ts"
+
+config_schema: "modules/search/config.schema.json"
+agent_docs: "modules/search/docs/AGENT.md"
+
+default_impl: "elasticsearch"
+
+dependencies:
+  required: []
+  optional:
+    - observability
+
+include_when:
+  - "brief mentions search functionality with relevance ranking"
+  - "filtering across many records (>100k) by multiple fields"
+  - "autocomplete or typeahead search"
+  - "faceted search (filter by category, price range, etc.)"
+
+implementations:
+  - name: elasticsearch
+    label: "Elasticsearch"
+    phase: v2
+    runtimes:
+      go: "modules/search/impl/elasticsearch-go"
+      bun: "modules/search/impl/elasticsearch-ts"
+    notes: "Default. Industry standard. Elastic Cloud free tier or self-hosted via Docker."

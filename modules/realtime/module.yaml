@@ -1,0 +1,36 @@
+name: "realtime"
+version: "1.0.0"
+description: "Real-time bidirectional communication via WebSockets. Publish events from server (payment received, status changed), subscribe on client. Requires auth and cache modules."
+category: "realtime"
+phase: "v2"
+always_include: false
+
+interface_go: "contracts/go/realtime.go"
+interface_ts: "contracts/ts/realtime.ts"
+
+config_schema: "modules/realtime/config.schema.json"
+agent_docs: "modules/realtime/docs/AGENT.md"
+
+default_impl: "websocket"
+
+dependencies:
+  required:
+    - cache
+    - auth
+  optional:
+    - observability
+
+include_when:
+  - "brief explicitly mentions live or real-time updates"
+  - "dashboard needs to reflect changes without page refresh"
+  - "live chat or messaging"
+  - "collaborative editing"
+
+implementations:
+  - name: websocket
+    label: "WebSocket (native)"
+    phase: v2
+    runtimes:
+      go: "modules/realtime/impl/websocket-go"
+      bun: "modules/realtime/impl/websocket-ts"
+    notes: "Default. No external service required — uses native WebSocket protocol."

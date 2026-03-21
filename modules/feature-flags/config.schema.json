@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "FEATURE_FLAGS_PROVIDER": {
+      "type": "string",
+      "enum": ["flagsmith"],
+      "description": "Feature flags provider to use"
+    },
+    "FLAGSMITH_SERVER_KEY": {
+      "type": "string",
+      "description": "Flagsmith server-side API key (starts with 'ser.')",
+      "sensitive": true
+    },
+    "FLAGSMITH_API_URL": {
+      "type": "string",
+      "description": "Flagsmith API URL. Defaults to https://edge.api.flagsmith.com/api/v1/ for cloud. Set to your self-hosted URL if applicable.",
+      "default": "https://edge.api.flagsmith.com/api/v1/"
+    },
+    "FLAGSMITH_CACHE_TTL_SECONDS": {
+      "type": "integer",
+      "description": "How long to cache flag values in seconds. 0 to disable. Default: 60.",
+      "default": 60
+    }
+  },
+  "required": ["FEATURE_FLAGS_PROVIDER", "FLAGSMITH_SERVER_KEY"]
+}

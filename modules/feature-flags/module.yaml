@@ -1,0 +1,34 @@
+name: "feature-flags"
+version: "1.0.0"
+description: "Feature flag management for phased rollouts, A/B testing, and kill switches. Gate features behind flags that can be toggled without a deploy."
+category: "feature-flags"
+phase: "v2"
+always_include: false
+
+interface_go: "contracts/go/feature_flags.go"
+interface_ts: "contracts/ts/feature-flags.ts"
+
+config_schema: "modules/feature-flags/config.schema.json"
+agent_docs: "modules/feature-flags/docs/AGENT.md"
+
+default_impl: "flagsmith"
+
+dependencies:
+  required: []
+  optional:
+    - cache
+
+include_when:
+  - "brief mentions phased rollout or gradual rollout"
+  - "A/B testing needed"
+  - "features need to be toggled without a deploy"
+  - "different behavior for beta users vs all users"
+
+implementations:
+  - name: flagsmith
+    label: "Flagsmith"
+    phase: v2
+    runtimes:
+      go: "modules/feature-flags/impl/flagsmith-go"
+      bun: "modules/feature-flags/impl/flagsmith-ts"
+    notes: "Default. Open source, can self-host. Generous free tier on Flagsmith Cloud."
