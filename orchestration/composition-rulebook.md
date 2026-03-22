@@ -384,6 +384,15 @@ Request
   → Handler
 ```
 
+**CORS middleware (always included):**
+
+CORS is wired in the generated project by default. Configuration:
+- `ALLOWED_ORIGINS` env var — comma-separated list of allowed origins (e.g., `http://localhost:3000,https://app.example.com`)
+- Defaults to `*` (allow all) if not set
+- In production, always set `ALLOWED_ORIGINS` to your actual frontend domain(s)
+- Go: `corsMiddleware(allowedOrigins)` in `middleware.go`, wired outermost in `router.go`
+- Bun: `cors()` from `hono/cors`, wired first in `router.ts`
+
 **Auth middleware behavior:**
 - Public routes: pass through without validation
 - Protected routes: extract `Authorization: Bearer {token}` header, validate via `auth.ValidateToken()`, inject `AuthUser` into context

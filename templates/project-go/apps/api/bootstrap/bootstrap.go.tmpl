@@ -154,6 +154,9 @@ func Init(ctx context.Context) (http.Handler, func(context.Context), error) {
 
 	// ── Wire HTTP handler ────────────────────────────────────────────────────
 	handler := api.NewRouter(api.Deps{
+		AllowedOrigins: cfg.AllowedOrigins,
+		// DB: db, // TODO: wire *sql.DB here once database is initialized
+		{{- if .HasModule "cache"}}Cache:    cacheSvc,{{- end}}
 		{{- if .HasModule "observability"}}Obs:      obsSvc,{{- end}}
 		{{- if .HasModule "error-tracking"}}Errors:   errSvc,{{- end}}
 		{{- if .HasModule "auth"}}Auth:     authSvc,{{- end}}

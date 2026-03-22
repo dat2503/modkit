@@ -23,6 +23,26 @@ This playbook defines the **6-phase workflow** for building a web application us
 
 ---
 
+## Approval Signals
+
+At every 🔒 checkpoint, the agent must present its output and wait. The following signals indicate the human's intent:
+
+**Approval (proceed to next phase):**
+- "looks good", "approved", "lgtm", "proceed", "go ahead", "ship it", "yes", "ok"
+- Any message that acknowledges the output without requesting changes
+
+**Rejection (revise current phase):**
+- "no", "change X", "wrong", "redo", "fix X", specific feedback on what to change
+- Any message requesting modifications
+
+**Ambiguous (ask for clarification):**
+- "hmm", "maybe", "not sure", "I think so"
+- If the signal is unclear, ask: "Should I proceed to the next phase, or would you like changes?"
+
+**Rule:** When in doubt, do NOT proceed. It is always better to ask than to assume approval.
+
+---
+
 ## Before You Start
 
 Load the following context before any phase:
@@ -345,7 +365,11 @@ Wait for human to:
 
 **Goal:** Build the application using modkit and write application code.
 
-### Agent Actions
+Phase 3 is split into sub-phases, each ending with a verifiable milestone. Complete each sub-phase fully before moving to the next.
+
+---
+
+### Phase 3a — Scaffold & Infrastructure
 
 **Step 3.1 — Scaffold the project**
 ```bash
@@ -359,7 +383,20 @@ modkit init \
 cd {project_name}
 ```
 
-**Step 3.2 — Write database migrations**
+**Step 3.2 — Setup infrastructure and verify**
+```bash
+cp .env.example .env   # fill in real keys
+make setup             # starts Postgres + Redis, installs deps
+make dev-api           # start the API
+```
+
+**Milestone 3a:** `curl http://localhost:8080/health` returns `{"status":"ok"}`. If it doesn't, stop and fix before proceeding.
+
+---
+
+### Phase 3b — Database & Migrations
+
+**Step 3.3 — Write database migrations**
 
 Create files in `infra/migrations/` named `{timestamp}_{description}.sql`.
 Use the schema from the approved architecture plan exactly.
@@ -373,19 +410,30 @@ CREATE TABLE invoices (
 );
 ```
 
-**Step 3.3 — Write the module bootstrap**
+**Step 3.4 — Run migrations**
+```bash
+make migrate
+```
+
+**Milestone 3b:** Migrations apply without errors. Verify tables exist with a quick SQL check or `make migrate` exits 0.
+
+---
+
+### Phase 3c — API Handlers & Backend Logic
+
+**Step 3.5 — Write the module bootstrap**
 
 `apps/api/bootstrap.go` (Go) or `apps/api/bootstrap.ts` (Bun) initializes all modules in the wiring order from the architecture plan.
 
-**Step 3.4 — Generate the OpenAPI spec**
+**Step 3.6 — Generate the OpenAPI spec**
 
 Create `apps/api/openapi.yaml` with all routes from the architecture plan. Use OpenAPI 3.1 format.
 
-**Step 3.5 — Write API handlers**
+**Step 3.7 — Write API handlers**
 
 For each route in the architecture plan, write the handler. Follow composition rulebook §4 (REST/OpenAPI) and §12 (error handling).
 
-**Step 3.6 — Generate typed API client** [MVP]
+**Step 3.8 — Generate typed API client** [MVP]
 
 ```bash
 # Go
@@ -395,18 +443,39 @@ oapi-codegen -generate server openapi.yaml > apps/api/gen/server.go
 bunx openapi-typescript apps/api/openapi.yaml -o apps/web/lib/api.types.ts
 ```
 
-**Step 3.7 — Write Next.js pages**
-
-For each page in the architecture plan. Use server components for initial data, client components for interactivity.
-
-**Step 3.8 — Write background jobs** (if `jobs` module selected) [MVP when jobs included]
+**Step 3.9 — Write background jobs** (if `jobs` module selected) [MVP when jobs included]
 
 Create job definitions in `apps/api/jobs/`. Each job must be idempotent (safe to retry).
 
-**Step 3.9 — Write tests**
+**Milestone 3c:** API builds without errors, smoke test auth works:
+```bash
+# Verify build
+cd apps/api && go build ./... (or bun run build)
+
+# Verify health + ready
+curl http://localhost:8080/health
+curl http://localhost:8080/ready
+
+# Verify auth rejects unauthenticated requests
+curl -s http://localhost:8080/api/v1/{any_protected_route} | grep -q "unauthorized"
+```
+
+---
+
+### Phase 3d — Frontend & Tests
+
+**Step 3.10 — Write Next.js pages**
+
+For each page in the architecture plan. Use server components for initial data, client components for interactivity. Place protected pages under `src/app/(protected)/`.
+
+**Step 3.11 — Write tests**
 
 - Unit tests for all handlers (mock modules at the interface level)
 - Integration tests for the 2–3 critical flows
+
+**Milestone 3d:** Frontend loads at `http://localhost:3000`, sign-in page renders, protected routes redirect to sign-in when not authenticated.
+
+---
 
 ### Validate as you go
 
@@ -561,3 +630,37 @@ If any phase fails:
 | Agent gets stuck | Stop, list open questions, present to human |
 
 **Never proceed to the next phase while the current phase has unresolved failures.**
+
+### Common failure runbooks
+
+**Database migration fails:**
+1. Read the error message — common causes: syntax error, missing referenced table, duplicate column
+2. Check migration ordering — migrations run alphabetically by filename timestamp
+3. If the schema is wrong: fix the migration SQL, run `make migrate-down` then `make migrate`
+4. If the database is in a bad state: drop and recreate via `docker compose down -v && make infra-up && make migrate`
+5. Never edit a migration that has been applied to a shared database — create a new migration instead
+
+**Auth keys are invalid (Clerk 401 on all requests):**
+1. Verify `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` are from the **same** Clerk application
+2. Check the key prefix: `sk_test_` for development, `sk_live_` for production — they are not interchangeable
+3. If using webhooks, verify `CLERK_WEBHOOK_SECRET` matches the webhook endpoint configured in the Clerk dashboard
+4. Test the key directly: `curl -H "Authorization: Bearer sk_test_..." https://api.clerk.com/v1/users?limit=1`
+
+**API returns wrong status codes or response shapes:**
+1. Compare the handler response against the OpenAPI spec from Phase 2
+2. Check that error responses use `writeError()` (Go) or `c.json({error:...}, status)` (Bun) — never `http.Error()`
+3. Verify the response envelope: success = `{"data": ...}`, error = `{"error": {"message": "..."}}`
+4. If a handler returns 200 for errors or 500 for validation failures, fix the status code mapping
+
+**Deploy fails halfway (Phase 5):**
+1. Check the deployment logs for the specific failure point
+2. If the container fails to start: check `docker logs` — usually a missing env var or failed database connection
+3. If migrations fail on staging: do NOT retry blindly — check if a partial migration was applied
+4. If the health check fails after deploy: verify `ALLOWED_ORIGINS`, `DATABASE_URL`, `REDIS_URL` are set for the target environment
+5. If rollback is needed: redeploy the previous known-good image/commit — do not attempt manual patches in production
+
+**Cache connection refused:**
+1. Verify Redis is running: `docker compose ps` should show the redis container as healthy
+2. Check `REDIS_URL` — default is `redis://localhost:6379` for local development
+3. If Redis is up but connection fails: check firewall rules or Docker network configuration
+4. The app should degrade gracefully (auth falls back to direct API calls) — but performance will suffer

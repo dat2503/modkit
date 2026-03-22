@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { secureHeaders } from 'hono/secure-headers'
 {{- if .HasModule "auth"}}
@@ -27,6 +28,7 @@ import type { IFeatureFlagsService } from '../../../../contracts/ts/feature-flag
 {{- end}}
 
 export interface Deps {
+  allowedOrigins: string
 {{- if .HasModule "auth"}}
   auth: IAuthService
 {{- end}}
@@ -56,11 +58,27 @@ export interface Deps {
 export function newRouter(deps: Deps): Hono {
   const app = new Hono()
 
+  const origins = deps.allowedOrigins.split(',').map(o => o.trim())
+  app.use('*', cors({
+    origin: origins.length === 1 && origins[0] === '*' ? '*' : origins,
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  }))
   app.use('*', logger())
   app.use('*', secureHeaders())
 
-  // Health check
+  // Liveness check — always returns 200
   app.get('/health', (c) => c.json({ status: 'ok' }))
+
+  // Readiness check — verifies dependencies are reachable
+  // TODO: wire db and cache checks once initialized
+  app.get('/ready', async (c) => {
+    // Add dependency checks here, e.g.:
+    // await db.execute(sql`SELECT 1`)
+    // await cache.set('__health_check__', '1', 10)
+    return c.json({ status: 'ready' })
+  })
 {{- if .HasModule "payments"}}
 
   // Stripe webhook — raw body required, no auth middleware

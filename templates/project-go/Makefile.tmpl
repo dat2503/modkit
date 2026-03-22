@@ -3,11 +3,16 @@
 # ── Dev ──────────────────────────────────────────────────────────────────────
 
 dev:
-	@echo "Starting API and web in parallel..."
-	@$(MAKE) -j2 dev-api dev-web
+	@echo "Starting API (:8080) and web (:3000)..."
+	@cd apps/api && go run . & cd apps/web && npm run dev
 
 dev-api:
-	cd apps/api && go run .
+	@if command -v air >/dev/null 2>&1; then \
+		air -c .air.toml; \
+	else \
+		echo "tip: install air for hot reload — go install github.com/air-verse/air@latest"; \
+		cd apps/api && go run .; \
+	fi
 
 dev-web:
 	cd apps/web && npm run dev

@@ -1,0 +1,20 @@
+{{- if .HasModule "auth"}}
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
+  const { userId } = await auth()
+
+  if (!userId) {
+    redirect('/sign-in')
+  }
+
+  return <>{children}</>
+}
+{{- else}}
+// No auth module — this layout is a pass-through.
+// Add your own auth guard here if needed.
+export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
+  return <>{children}</>
+}
+{{- end}}

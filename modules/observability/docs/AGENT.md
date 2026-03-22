@@ -43,6 +43,17 @@ Initialize it first, before every other module.
    app.use('*', tracingMiddleware(obs))
    ```
 
+## Current implementation status
+
+**Structured logging** — fully implemented via `slog`. All `Log()` calls produce real structured log output.
+
+**Distributed tracing** — the `StartSpan()` and `span.End()` methods exist but return **no-op spans**. Trace data is not exported to any backend. This means:
+- Your code can call `StartSpan()` everywhere — it won't break, but won't produce traces yet
+- Once a real OTel exporter is configured (Jaeger, Honeycomb, etc.), tracing will activate without code changes
+- The middleware records `http.method`, `http.url`, `http.status_code` attributes — these will populate once the exporter is wired
+
+Do NOT skip writing span code because tracing is no-op — the spans will become real when the exporter is connected.
+
 ## Span patterns
 
 ### Handler span (Go)

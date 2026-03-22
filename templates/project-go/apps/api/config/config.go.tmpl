@@ -11,6 +11,7 @@ import (
 
 // Config holds all application configuration loaded from environment variables.
 type Config struct {
+	AllowedOrigins string
 	{{- if .HasModule "observability"}}
 	Observability ObservabilityConfig
 	{{- end}}
@@ -60,6 +61,7 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
+		AllowedOrigins: envOrDefault("ALLOWED_ORIGINS", "*"),
 		{{- if .HasModule "observability"}}
 		Observability: ObservabilityConfig{
 			ServiceName: get("OTEL_SERVICE_NAME", true),

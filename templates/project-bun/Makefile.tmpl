@@ -3,8 +3,8 @@
 # ── Dev ──────────────────────────────────────────────────────────────────────
 
 dev:
-	@echo "Starting API and web in parallel..."
-	@$(MAKE) -j2 dev-api dev-web
+	@echo "Starting API (:8080) and web (:3000)..."
+	@cd apps/api && bun run dev & cd apps/web && bun run dev
 
 dev-api:
 	cd apps/api && bun run dev

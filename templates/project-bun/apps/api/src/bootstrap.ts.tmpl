@@ -101,6 +101,7 @@ export async function bootstrap(): Promise<{ app: Hono; shutdown: () => Promise<
 {{- end}}
 
   const app = newRouter({
+    allowedOrigins: cfg.allowedOrigins,
 {{- if .HasModule "auth"}}
     auth,
 {{- end}}

@@ -2,18 +2,27 @@
 package api
 
 import (
+	"database/sql"
 	"net/http"
+	{{- if .HasModule "cache"}}
+	"time"
+	{{- end}}
 
 	contracts "github.com/dat2503/modkit/contracts/go"
 )
 
 // Deps holds all module dependencies injected into the router.
 type Deps struct {
+	AllowedOrigins string
+	DB             *sql.DB
 	{{- if .HasModule "observability"}}
 	Obs contracts.ObservabilityService
 	{{- end}}
 	{{- if .HasModule "error-tracking"}}
 	Errors contracts.ErrorTrackingService
+	{{- end}}
+	{{- if .HasModule "cache"}}
+	Cache contracts.CacheService
 	{{- end}}
 	{{- if .HasModule "auth"}}
 	Auth contracts.AuthService
@@ -41,6 +50,9 @@ func NewRouter(deps Deps) http.Handler {
 
 	var handler http.Handler = mux
 
+	// CORS must be outermost to handle preflight OPTIONS before auth
+	handler = corsMiddleware(deps.AllowedOrigins)(handler)
+
 	{{- if .HasModule "observability"}}
 	handler = tracingMiddleware(deps.Obs)(handler)
 	handler = loggingMiddleware(deps.Obs)(handler)
@@ -48,9 +60,14 @@ func NewRouter(deps Deps) http.Handler {
 	{{- if .HasModule "error-tracking"}}
 	handler = recoveryMiddleware(deps.Errors)(handler)
 	{{- end}}
+	{{- if .HasModule "cache"}}
+	// Uncomment to enable rate limiting (100 requests per minute per IP):
+	// handler = rateLimitMiddleware(deps.Cache, 100, time.Minute)(handler)
+	{{- end}}
 
 	// ── Health ───────────────────────────────────────────────────────────────
 	mux.HandleFunc("GET /health", healthHandler)
+	mux.HandleFunc("GET /ready", readyHandler(deps))
 
 	// ── API v1 ───────────────────────────────────────────────────────────────
 	// TODO: register your route handlers here
@@ -71,9 +88,38 @@ func NewRouter(deps Deps) http.Handler {
 	return handler
 }
 
-// healthHandler returns 200 OK for load balancer health checks.
+// healthHandler returns 200 OK — simple liveness check.
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"ok"}`))
+}
+
+// readyHandler verifies database (and cache if available) connectivity.
+// Returns 200 if all dependencies are reachable, 503 otherwise.
+func readyHandler(deps Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if deps.DB != nil {
+			if err := deps.DB.PingContext(r.Context()); err != nil {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				w.Write([]byte(`{"status":"unavailable","error":"database unreachable"}`))
+				return
+			}
+		}
+
+		{{- if .HasModule "cache"}}
+		if deps.Cache != nil {
+			if err := deps.Cache.Set(r.Context(), "__health_check__", []byte("1"), 10*time.Second); err != nil {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				w.Write([]byte(`{"status":"unavailable","error":"cache unreachable"}`))
+				return
+			}
+		}
+		{{- end}}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ready"}`))
+	}
 }

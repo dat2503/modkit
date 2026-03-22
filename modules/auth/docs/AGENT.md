@@ -99,6 +99,38 @@ import { ClerkProvider, SignIn, SignUp } from '@clerk/nextjs'
 
 The backend auth module validates tokens issued by Clerk's frontend SDK.
 
+### Protected routes
+
+The generated project includes a protected layout at `src/app/(protected)/layout.tsx`. Any page placed under `src/app/(protected)/` is automatically guarded — unauthenticated users are redirected to `/sign-in`.
+
+```
+src/app/
+  (protected)/
+    layout.tsx          ← auth guard (generated)
+    dashboard/page.tsx  ← protected
+    settings/page.tsx   ← protected
+  page.tsx              ← public landing page
+```
+
+**Do NOT** add per-page auth checks in protected routes — the layout handles it. Only add auth checks in pages outside `(protected)/` if they need conditional auth behavior.
+
+## Cache key usage
+
+The auth module uses the cache module for session storage and token management. Here are the exact keys it writes:
+
+| Key pattern | TTL | Purpose |
+|---|---|---|
+| `sessions:{sessionID}` | 24h | Clerk session data cached to avoid repeated API calls |
+| `auth:user:{userID}` | 15m | Cached user profile to reduce Clerk lookups |
+| `auth:blacklist:{tokenJTI}` | matches token expiry | Revoked tokens — checked on every `ValidateToken` call |
+
+**If cache is unavailable:**
+- `ValidateToken` falls back to direct Clerk API call (slower but functional)
+- Session cache misses result in a Clerk API round-trip per request
+- Token blacklist misses mean revoked tokens may remain valid until natural expiry
+
+**Namespacing:** All auth keys use the `sessions:` or `auth:` prefix. Do not use these prefixes for application-level cache keys.
+
 ## Required env vars
 
 ```

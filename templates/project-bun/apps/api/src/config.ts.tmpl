@@ -2,6 +2,7 @@ export interface Config {
   port: number
   appEnv: string
   databaseUrl: string
+  allowedOrigins: string
 {{- if .HasModule "cache"}}
   redisUrl: string
 {{- end}}
@@ -55,6 +56,7 @@ export function loadConfig(): Config {
     port: parseInt(optional('PORT', '8080'), 10),
     appEnv: optional('APP_ENV', 'development'),
     databaseUrl: require('DATABASE_URL'),
+    allowedOrigins: optional('ALLOWED_ORIGINS', '*'),
 {{- if .HasModule "cache"}}
     redisUrl: require('REDIS_URL'),
 {{- end}}
