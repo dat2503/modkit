@@ -4,8 +4,17 @@
   "properties": {
     "AUTH_PROVIDER": {
       "type": "string",
-      "enum": ["clerk", "privy"],
+      "enum": ["better-auth", "clerk", "privy"],
       "description": "Auth provider to use"
+    },
+    "BETTER_AUTH_URL": {
+      "type": "string",
+      "description": "Base URL of the Better Auth server (e.g. http://localhost:3000)"
+    },
+    "BETTER_AUTH_SECRET": {
+      "type": "string",
+      "description": "Secret key for Better Auth token signing. Generate with: openssl rand -hex 32",
+      "sensitive": true
     },
     "CLERK_SECRET_KEY": {
       "type": "string",
@@ -22,5 +31,19 @@
       "sensitive": true
     }
   },
-  "required": ["AUTH_PROVIDER", "CLERK_SECRET_KEY", "CLERK_PUBLISHABLE_KEY"]
+  "required": ["AUTH_PROVIDER"],
+  "if": {
+    "properties": { "AUTH_PROVIDER": { "const": "better-auth" } }
+  },
+  "then": {
+    "required": ["BETTER_AUTH_URL", "BETTER_AUTH_SECRET"]
+  },
+  "else": {
+    "if": {
+      "properties": { "AUTH_PROVIDER": { "const": "clerk" } }
+    },
+    "then": {
+      "required": ["CLERK_SECRET_KEY", "CLERK_PUBLISHABLE_KEY"]
+    }
+  }
 }

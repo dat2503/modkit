@@ -14,6 +14,7 @@ import (
 type TemplateData struct {
 	Name            string
 	Modules         []ScaffoldModule
+	Frontend        string // "vite" or "next"
 	GoModule        string
 	GoVersion       string
 	BunVersion      string

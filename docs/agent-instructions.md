@@ -42,7 +42,7 @@ generated project (my-app/)
 │   │   ├── bootstrap/            ← module initialization
 │   │   ├── config/               ← env-based config loading
 │   │   └── api/                  ← router + handlers
-│   └── web/           ← Next.js 14 frontend
+│   └── web/           ← Vite + React frontend (default) or Next.js
 ├── infra/
 │   └── docker-compose.yaml       ← local dev services
 ├── Makefile            ← common tasks
@@ -170,7 +170,7 @@ my-app/
 │       ├── package.json
 │       ├── src/
 │       │   ├── app/
-│       │   │   ├── layout.tsx   ← ClerkProvider wraps app (if auth selected)
+│       │   │   ├── layout.tsx   ← root layout (Next.js) or main.tsx entry (Vite)
 │       │   │   └── page.tsx     ← placeholder home page
 │       │   └── lib/
 │       │       └── api.ts       ← typed fetch client (api.get, api.post, etc.)
@@ -293,7 +293,7 @@ Global flags:
 
 | Command | Purpose | Key flags |
 |---------|---------|-----------|
-| `modkit init` | Scaffold new project from template | `--name`, `--runtime go\|bun`, `--modules`, `--go-module`, `--no-prompt` |
+| `modkit init` | Scaffold new project from template | `--name`, `--runtime go\|bun` (default: bun), `--frontend vite\|next` (default: vite), `--modules`, `--go-module`, `--no-prompt` |
 | `modkit list` | List all available modules | `--runtime go\|bun` |
 | `modkit info <module>` | Show module details | `--agent` (prints AGENT.md) |
 | `modkit pull <module>` | Add a module to existing project | `--impl <name>` |
@@ -371,11 +371,11 @@ func handleListTasks(w http.ResponseWriter, r *http.Request) {
 2. Enqueue in a handler: `deps.Jobs.Enqueue(ctx, "send_welcome_email", payload)`
 3. Register the handler in `bootstrap.go`: `jobs.RegisterHandler("send_welcome_email", handleSendWelcomeEmail)`
 
-### Add a Next.js page
+### Add a frontend page
 
-1. Create `apps/web/src/app/tasks/page.tsx`
-2. Use the API client: `import { api } from '@/lib/api'`
-3. For auth-protected pages, wrap with Clerk's `<SignedIn>` component
+**Vite (default):** Create `apps/web/src/pages/Tasks.tsx`, add a `<Route>` in `App.tsx`, use the API client: `import { api } from '../lib/api'`. For protected pages, wrap with `<ProtectedRoute>`.
+
+**Next.js:** Create `apps/web/src/app/tasks/page.tsx`, use `import { api } from '@/lib/api'`. For protected pages, place under `src/app/(protected)/`.
 
 ### Add a module after initial scaffold
 

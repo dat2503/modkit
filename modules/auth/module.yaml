@@ -11,7 +11,7 @@ interface_ts: "contracts/ts/auth.ts"
 config_schema: "modules/auth/config.schema.json"
 agent_docs: "modules/auth/docs/AGENT.md"
 
-default_impl: "clerk"
+default_impl: "better-auth"
 
 dependencies:
   required:
@@ -25,13 +25,20 @@ include_when:
   - "app has sign-in or sign-up flows"
 
 implementations:
+  - name: better-auth
+    label: "Better Auth"
+    phase: mvp
+    runtimes:
+      go: "modules/auth/impl/better-auth-go"
+      bun: "modules/auth/impl/better-auth-ts"
+    notes: "Default. Self-hosted, open-source. Supports email/password, OAuth, magic links, passkeys. No external service dependency."
   - name: clerk
     label: "Clerk"
     phase: mvp
     runtimes:
       go: "modules/auth/impl/clerk-go"
       bun: "modules/auth/impl/clerk-ts"
-    notes: "Recommended. Managed auth with UI components, webhooks, and organizations."
+    notes: "Managed auth with UI components, webhooks, and organizations."
   - name: privy
     label: "Privy"
     phase: v2

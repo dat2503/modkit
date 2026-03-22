@@ -1,0 +1,215 @@
+// Package config loads and validates all environment-based configuration.
+// Config is loaded once at startup and injected into modules via constructors.
+// Never read os.Getenv directly in module code — always use this package.
+package config
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+// Config holds all application configuration loaded from environment variables.
+type Config struct {
+	AllowedOrigins string
+	{{- if .HasModule "observability"}}
+	Observability ObservabilityConfig
+	{{- end}}
+	{{- if .HasModule "error-tracking"}}
+	ErrorTracking ErrorTrackingConfig
+	{{- end}}
+	{{- if .HasModule "cache"}}
+	Cache CacheConfig
+	{{- end}}
+	{{- if .HasModule "auth"}}
+	Auth AuthConfig
+	{{- end}}
+	{{- if .HasModule "payments"}}
+	Payments PaymentsConfig
+	{{- end}}
+	{{- if .HasModule "email"}}
+	Email EmailConfig
+	{{- end}}
+	{{- if .HasModule "storage"}}
+	Storage StorageConfig
+	{{- end}}
+	{{- if .HasModule "jobs"}}
+	Jobs JobsConfig
+	{{- end}}
+}
+
+// Load reads configuration from environment variables and validates required fields.
+// Returns an error listing all missing required variables.
+func Load() (*Config, error) {
+	var missing []string
+
+	get := func(key string, required bool) string {
+		v := os.Getenv(key)
+		if v == "" && required {
+			missing = append(missing, key)
+		}
+		return v
+	}
+
+	getInt := func(key string, fallback int) int {
+		if v := os.Getenv(key); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				return n
+			}
+		}
+		return fallback
+	}
+
+	cfg := &Config{
+		AllowedOrigins: envOrDefault("ALLOWED_ORIGINS", "*"),
+		{{- if .HasModule "observability"}}
+		Observability: ObservabilityConfig{
+			ServiceName: get("OTEL_SERVICE_NAME", true),
+			Endpoint:    get("OTEL_EXPORTER_OTLP_ENDPOINT", false),
+			LogLevel:    envOrDefault("LOG_LEVEL", "info"),
+			LogFormat:   envOrDefault("LOG_FORMAT", "json"),
+		},
+		{{- end}}
+		{{- if .HasModule "error-tracking"}}
+		ErrorTracking: ErrorTrackingConfig{
+			SentryDSN:        get("SENTRY_DSN", true),
+			Environment:      envOrDefault("SENTRY_ENVIRONMENT", "development"),
+			TracesSampleRate: parseFloat(os.Getenv("SENTRY_TRACES_SAMPLE_RATE"), 1.0),
+		},
+		{{- end}}
+		{{- if .HasModule "cache"}}
+		Cache: CacheConfig{
+			RedisURL:       get("REDIS_URL", true),
+			MaxConnections: getInt("REDIS_MAX_CONNECTIONS", 10),
+		},
+		{{- end}}
+		{{- if .HasModule "auth"}}
+		Auth: AuthConfig{
+			SecretKey:      get("CLERK_SECRET_KEY", true),
+			PublishableKey: get("CLERK_PUBLISHABLE_KEY", true),
+			WebhookSecret:  get("CLERK_WEBHOOK_SECRET", false),
+		},
+		{{- end}}
+		{{- if .HasModule "payments"}}
+		Payments: PaymentsConfig{
+			SecretKey:     get("STRIPE_SECRET_KEY", true),
+			WebhookSecret: get("STRIPE_WEBHOOK_SECRET", true),
+		},
+		{{- end}}
+		{{- if .HasModule "email"}}
+		Email: EmailConfig{
+			APIKey:      get("EMAIL_API_KEY", true),
+			FromDefault: get("EMAIL_FROM_DEFAULT", true),
+		},
+		{{- end}}
+		{{- if .HasModule "storage"}}
+		Storage: StorageConfig{
+			Bucket:          get("STORAGE_BUCKET", true),
+			Region:          get("STORAGE_REGION", true),
+			AccessKeyID:     get("STORAGE_ACCESS_KEY_ID", true),
+			SecretAccessKey: get("STORAGE_SECRET_ACCESS_KEY", true),
+			Endpoint:        get("STORAGE_ENDPOINT", false),
+			PublicBaseURL:   get("STORAGE_PUBLIC_BASE_URL", false),
+		},
+		{{- end}}
+		{{- if .HasModule "jobs"}}
+		Jobs: JobsConfig{
+			Concurrency:  getInt("JOBS_CONCURRENCY", 10),
+			MaxRetries:   getInt("JOBS_MAX_RETRIES", 3),
+			DefaultQueue: envOrDefault("JOBS_DEFAULT_QUEUE", "default"),
+		},
+		{{- end}}
+	}
+
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("missing required environment variables: %v", missing)
+	}
+
+	return cfg, nil
+}
+
+// ── Config structs ────────────────────────────────────────────────────────────
+
+{{- if .HasModule "observability"}}
+type ObservabilityConfig struct {
+	ServiceName string
+	Endpoint    string
+	LogLevel    string
+	LogFormat   string
+}
+{{- end}}
+
+{{- if .HasModule "error-tracking"}}
+type ErrorTrackingConfig struct {
+	SentryDSN        string
+	Environment      string
+	TracesSampleRate float64
+}
+{{- end}}
+
+{{- if .HasModule "cache"}}
+type CacheConfig struct {
+	RedisURL       string
+	MaxConnections int
+}
+{{- end}}
+
+{{- if .HasModule "auth"}}
+type AuthConfig struct {
+	SecretKey      string
+	PublishableKey string
+	WebhookSecret  string
+}
+{{- end}}
+
+{{- if .HasModule "payments"}}
+type PaymentsConfig struct {
+	SecretKey     string
+	WebhookSecret string
+}
+{{- end}}
+
+{{- if .HasModule "email"}}
+type EmailConfig struct {
+	APIKey      string
+	FromDefault string
+}
+{{- end}}
+
+{{- if .HasModule "storage"}}
+type StorageConfig struct {
+	Bucket          string
+	Region          string
+	AccessKeyID     string
+	SecretAccessKey string
+	Endpoint        string
+	PublicBaseURL   string
+}
+{{- end}}
+
+{{- if .HasModule "jobs"}}
+type JobsConfig struct {
+	Concurrency  int
+	MaxRetries   int
+	DefaultQueue string
+}
+{{- end}}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func parseFloat(s string, fallback float64) float64 {
+	if s == "" {
+		return fallback
+	}
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return f
+	}
+	return fallback
+}

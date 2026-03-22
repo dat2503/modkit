@@ -1,0 +1,79 @@
+// Package validate provides request validation helpers that produce
+// consistent 400 Bad Request responses with field-level error details.
+package validate
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+)
+
+// Errors collects field-level validation errors.
+type Errors struct {
+	fields []FieldError
+}
+
+// FieldError describes a single validation failure.
+type FieldError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+
+// Required checks that a string field is non-empty after trimming whitespace.
+func (e *Errors) Required(field, value string) {
+	if strings.TrimSpace(value) == "" {
+		e.fields = append(e.fields, FieldError{Field: field, Message: "is required"})
+	}
+}
+
+// MinLen checks that a string field meets a minimum length.
+func (e *Errors) MinLen(field, value string, min int) {
+	if len(value) < min {
+		e.fields = append(e.fields, FieldError{
+			Field:   field,
+			Message: fmt.Sprintf("must be at least %d characters", min),
+		})
+	}
+}
+
+// MaxLen checks that a string field does not exceed a maximum length.
+func (e *Errors) MaxLen(field, value string, max int) {
+	if len(value) > max {
+		e.fields = append(e.fields, FieldError{
+			Field:   field,
+			Message: fmt.Sprintf("must be at most %d characters", max),
+		})
+	}
+}
+
+// HasErrors returns true if any validation errors were recorded.
+func (e *Errors) HasErrors() bool {
+	return len(e.fields) > 0
+}
+
+// WriteResponse writes a 400 JSON response with all field errors.
+// Returns true if there were errors (response was written), false if clean.
+//
+// Usage:
+//
+//	var v validate.Errors
+//	v.Required("title", req.Title)
+//	v.MaxLen("title", req.Title, 255)
+//	if v.WriteResponse(w) {
+//	    return
+//	}
+func (e *Errors) WriteResponse(w http.ResponseWriter) bool {
+	if !e.HasErrors() {
+		return false
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	json.NewEncoder(w).Encode(map[string]any{
+		"error": map[string]any{
+			"message": "validation failed",
+			"fields":  e.fields,
+		},
+	})
+	return true
+}

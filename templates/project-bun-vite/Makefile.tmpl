@@ -1,0 +1,62 @@
+.PHONY: dev build test lint type-check infra-up infra-down
+
+# ── Dev ──────────────────────────────────────────────────────────────────────
+
+dev:
+	@echo "Starting API (:8080) and web (:3000)..."
+	@cd apps/api && bun run dev & cd apps/web && bun run dev
+
+dev-api:
+	cd apps/api && bun run dev
+
+dev-web:
+	cd apps/web && bun run dev
+
+# ── Build ─────────────────────────────────────────────────────────────────────
+
+build:
+	$(MAKE) build-api
+	$(MAKE) build-web
+
+build-api:
+	cd apps/api && bun run build
+
+build-web:
+	cd apps/web && bun run build
+
+# ── Test ──────────────────────────────────────────────────────────────────────
+
+test:
+	cd apps/api && bun test
+
+# ── Lint ──────────────────────────────────────────────────────────────────────
+
+lint:
+	cd apps/api && bun run lint
+	cd apps/web && bun run lint
+
+type-check:
+	cd apps/api && bun run type-check
+	cd apps/web && bun run type-check
+
+# ── Infrastructure ────────────────────────────────────────────────────────────
+
+infra-up:
+	docker compose -f infra/docker-compose.yaml up -d
+
+infra-down:
+	docker compose -f infra/docker-compose.yaml down
+
+infra-logs:
+	docker compose -f infra/docker-compose.yaml logs -f
+
+# ── Setup ─────────────────────────────────────────────────────────────────────
+
+setup:
+	@echo "Installing dependencies..."
+	cd apps/api && bun install
+	cd apps/web && bun install
+	@echo "Starting infrastructure..."
+	$(MAKE) infra-up
+	@echo ""
+	@echo "Setup complete. Run 'make dev' to start."

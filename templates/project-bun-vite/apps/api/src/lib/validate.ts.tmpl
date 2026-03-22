@@ -1,0 +1,55 @@
+/**
+ * Request validation helpers that produce consistent 400 Bad Request
+ * responses with field-level error details.
+ *
+ * Usage with Hono:
+ *   const v = new Validator()
+ *   v.required('title', body.title)
+ *   v.maxLen('title', body.title, 255)
+ *   if (v.hasErrors()) return v.response(c)
+ */
+
+import type { Context } from 'hono'
+
+interface FieldError {
+  field: string
+  message: string
+}
+
+export class Validator {
+  private fields: FieldError[] = []
+
+  required(field: string, value: unknown): void {
+    if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
+      this.fields.push({ field, message: 'is required' })
+    }
+  }
+
+  minLen(field: string, value: string, min: number): void {
+    if (value.length < min) {
+      this.fields.push({ field, message: `must be at least ${min} characters` })
+    }
+  }
+
+  maxLen(field: string, value: string, max: number): void {
+    if (value.length > max) {
+      this.fields.push({ field, message: `must be at most ${max} characters` })
+    }
+  }
+
+  hasErrors(): boolean {
+    return this.fields.length > 0
+  }
+
+  response(c: Context): Response {
+    return c.json(
+      {
+        error: {
+          message: 'validation failed',
+          fields: this.fields,
+        },
+      },
+      400
+    )
+  }
+}

@@ -1,0 +1,138 @@
+import { Hono } from 'hono'
+import { loadConfig } from './config'
+import { newRouter } from './router'
+{{- if .HasModule "observability"}}
+import { OtelObservabilityService } from '../../../modules/observability/impl/otel-ts/otel'
+{{- end}}
+{{- if .HasModule "error-tracking"}}
+import { SentryErrorTrackingService } from '../../../modules/error-tracking/impl/sentry-ts/sentry'
+{{- end}}
+{{- if .HasModule "cache"}}
+import { RedisCacheService } from '../../../modules/cache/impl/redis-ts/redis'
+{{- end}}
+{{- if .HasModule "auth"}}
+import { ClerkAuthService } from '../../../modules/auth/impl/clerk-ts/clerk'
+{{- end}}
+{{- if .HasModule "payments"}}
+import { StripePaymentsService } from '../../../modules/payments/impl/stripe-ts/stripe'
+{{- end}}
+{{- if .HasModule "email"}}
+import { ResendEmailService } from '../../../modules/email/impl/resend-ts/resend'
+{{- end}}
+{{- if .HasModule "storage"}}
+import { S3StorageService } from '../../../modules/storage/impl/s3-ts/s3'
+{{- end}}
+{{- if .HasModule "jobs"}}
+import { BullMQJobsService } from '../../../modules/jobs/impl/bullmq-ts/bullmq'
+{{- end}}
+{{- if .HasModule "realtime"}}
+import { WebSocketRealtimeService } from '../../../modules/realtime/impl/websocket-ts/websocket'
+{{- end}}
+{{- if .HasModule "search"}}
+import { ElasticsearchSearchService } from '../../../modules/search/impl/elasticsearch-ts/elasticsearch'
+{{- end}}
+{{- if .HasModule "feature-flags"}}
+import { FlagsmithFeatureFlagsService } from '../../../modules/feature-flags/impl/flagsmith-ts/flagsmith'
+{{- end}}
+
+export async function bootstrap(): Promise<{ app: Hono; shutdown: () => Promise<void> }> {
+  const cfg = loadConfig()
+  const shutdowns: Array<() => Promise<void>> = []
+{{- if .HasModule "observability"}}
+
+  // 1. Observability — always first
+  const observability = new OtelObservabilityService({
+    serviceName: cfg.otelServiceName,
+    endpoint: cfg.otelEndpoint,
+  })
+  shutdowns.push(() => observability.shutdown())
+{{- end}}
+{{- if .HasModule "error-tracking"}}
+
+  // 2. Error tracking — always second
+  const errorTracking = new SentryErrorTrackingService({
+    dsn: cfg.sentryDsn,
+    environment: cfg.sentryEnvironment,
+  })
+  shutdowns.push(() => errorTracking.flush(2000))
+{{- end}}
+{{- if .HasModule "cache"}}
+
+  // 3. Cache — before auth and jobs
+  const cache = new RedisCacheService({ url: cfg.redisUrl })
+  shutdowns.push(async () => { cache.quit() })
+{{- end}}
+{{- if .HasModule "auth"}}
+
+  // 4. Auth — after cache
+  const auth = new ClerkAuthService({ secretKey: cfg.clerkSecretKey })
+{{- end}}
+{{- if .HasModule "payments"}}
+
+  const payments = new StripePaymentsService({ secretKey: cfg.stripeSecretKey })
+{{- end}}
+{{- if .HasModule "email"}}
+
+  const email = new ResendEmailService({ apiKey: cfg.resendApiKey, from: cfg.emailFrom })
+{{- end}}
+{{- if .HasModule "storage"}}
+
+  const storage = new S3StorageService({
+    bucket: cfg.s3Bucket,
+    region: cfg.awsRegion,
+  })
+{{- end}}
+{{- if .HasModule "jobs"}}
+
+  const jobs = new BullMQJobsService({ redisUrl: cfg.redisUrl })
+  shutdowns.push(() => jobs.stop())
+{{- end}}
+{{- if .HasModule "realtime"}}
+
+  const realtime = new WebSocketRealtimeService({}, {{if .HasModule "cache"}}cache{{else}}undefined as any{{end}})
+{{- end}}
+{{- if .HasModule "search"}}
+
+  const search = new ElasticsearchSearchService({ url: cfg.elasticsearchUrl })
+{{- end}}
+{{- if .HasModule "feature-flags"}}
+
+  const featureFlags = new FlagsmithFeatureFlagsService({ serverApiKey: cfg.flagsmithServerApiKey })
+{{- end}}
+
+  const app = newRouter({
+    allowedOrigins: cfg.allowedOrigins,
+{{- if .HasModule "auth"}}
+    auth,
+{{- end}}
+{{- if .HasModule "payments"}}
+    payments,
+{{- end}}
+{{- if .HasModule "email"}}
+    email,
+{{- end}}
+{{- if .HasModule "storage"}}
+    storage,
+{{- end}}
+{{- if .HasModule "jobs"}}
+    jobs,
+{{- end}}
+{{- if .HasModule "realtime"}}
+    realtime,
+{{- end}}
+{{- if .HasModule "search"}}
+    search,
+{{- end}}
+{{- if .HasModule "feature-flags"}}
+    featureFlags,
+{{- end}}
+  })
+
+  const shutdown = async () => {
+    for (const fn of shutdowns.reverse()) {
+      await fn().catch(console.error)
+    }
+  }
+
+  return { app, shutdown }
+}

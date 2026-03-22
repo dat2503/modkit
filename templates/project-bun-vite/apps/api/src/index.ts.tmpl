@@ -1,0 +1,23 @@
+import { bootstrap } from './bootstrap'
+
+const port = parseInt(process.env.PORT ?? '8080', 10)
+
+const { app, shutdown } = await bootstrap()
+
+const server = Bun.serve({
+  port,
+  fetch: app.fetch,
+})
+
+console.log(`API listening on http://localhost:${port}`)
+
+// Graceful shutdown
+const signals = ['SIGINT', 'SIGTERM'] as const
+for (const signal of signals) {
+  process.on(signal, async () => {
+    console.log(`${signal} received, shutting down...`)
+    server.stop()
+    await shutdown()
+    process.exit(0)
+  })
+}

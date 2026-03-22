@@ -1,0 +1,241 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	{{- if .HasModule "payments"}}
+	"io"
+	{{- end}}
+	"net/http"
+	"strings"
+	"time"
+
+	contracts "github.com/dat2503/modkit/contracts/go"
+)
+
+// ── CORS middleware ───────────────────────────────────────────────────────────
+
+func corsMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
+	origins := strings.Split(allowedOrigins, ",")
+	allowAll := len(origins) == 1 && origins[0] == "*"
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			reqOrigin := r.Header.Get("Origin")
+			if allowAll {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+			} else if reqOrigin != "" {
+				for _, o := range origins {
+					if strings.TrimSpace(o) == reqOrigin {
+						w.Header().Set("Access-Control-Allow-Origin", reqOrigin)
+						w.Header().Set("Vary", "Origin")
+						break
+					}
+				}
+			}
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// ── Tracing middleware ────────────────────────────────────────────────────────
+
+{{- if .HasModule "observability"}}
+func tracingMiddleware(obs contracts.ObservabilityService) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			operationName := r.Method + " " + r.URL.Path
+			ctx, span := obs.StartSpan(r.Context(), operationName)
+			defer span.End()
+
+			span.SetAttribute("http.method", r.Method)
+			span.SetAttribute("http.url", r.URL.String())
+			span.SetAttribute("http.user_agent", r.UserAgent())
+
+			rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+			next.ServeHTTP(rw, r.WithContext(ctx))
+
+			span.SetAttribute("http.status_code", rw.statusCode)
+		})
+	}
+}
+
+func loggingMiddleware(obs contracts.ObservabilityService) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+			next.ServeHTTP(rw, r)
+			obs.Log(r.Context(), contracts.LogLevelInfo, "request", map[string]any{
+				"method":   r.Method,
+				"path":     r.URL.Path,
+				"status":   rw.statusCode,
+				"duration": time.Since(start).Milliseconds(),
+			})
+		})
+	}
+}
+{{- end}}
+
+// ── Recovery middleware ───────────────────────────────────────────────────────
+
+{{- if .HasModule "error-tracking"}}
+func recoveryMiddleware(errSvc contracts.ErrorTrackingService) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					err, ok := rec.(error)
+					if !ok {
+						err = fmt.Errorf("panic: %v", rec)
+					}
+					errSvc.CaptureError(r.Context(), err, contracts.CaptureOptions{
+						Tags: map[string]string{"type": "panic"},
+					})
+					writeError(w, http.StatusInternalServerError, "internal server error")
+				}
+			}()
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+{{- end}}
+
+// ── Auth middleware ───────────────────────────────────────────────────────────
+
+{{- if .HasModule "auth"}}
+// authRequired wraps a handler to require a valid auth token.
+// Extracts the Bearer token from the Authorization header.
+func authRequired(auth contracts.AuthService, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if token == "" {
+			writeError(w, http.StatusUnauthorized, "missing authorization header")
+			return
+		}
+		user, err := auth.ValidateToken(r.Context(), token)
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, "invalid or expired token")
+			return
+		}
+		ctx := context.WithValue(r.Context(), contextKeyUser, user)
+		next(w, r.WithContext(ctx))
+	}
+}
+
+type contextKey string
+
+const contextKeyUser contextKey = "user"
+
+// UserFromContext extracts the authenticated user from the request context.
+func UserFromContext(ctx context.Context) (*contracts.AuthUser, bool) {
+	user, ok := ctx.Value(contextKeyUser).(*contracts.AuthUser)
+	return user, ok
+}
+{{- end}}
+
+// ── Rate limiting middleware ─────────────────────────────────────────────────
+
+{{- if .HasModule "cache"}}
+// rateLimitMiddleware limits requests per IP using the cache module.
+// maxRequests is the limit per window; window is the duration in seconds.
+// Enable by wiring into the middleware chain in NewRouter.
+func rateLimitMiddleware(cache contracts.CacheService, maxRequests int64, window time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ip := r.RemoteAddr
+			if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+				ip = strings.Split(fwd, ",")[0]
+			}
+			key := fmt.Sprintf("rate:%s", strings.TrimSpace(ip))
+
+			count, err := cache.Increment(r.Context(), key, 1)
+			if err != nil {
+				// If cache is down, allow the request through
+				next.ServeHTTP(w, r)
+				return
+			}
+			if count == 1 {
+				_ = cache.Expire(r.Context(), key, window)
+			}
+			if count > maxRequests {
+				writeError(w, http.StatusTooManyRequests, "rate limit exceeded")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+{{- end}}
+
+// ── Webhook handlers ──────────────────────────────────────────────────────────
+
+{{- if .HasModule "payments"}}
+func stripeWebhookHandler(payments contracts.PaymentsService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "failed to read body")
+			return
+		}
+		event, err := payments.ConstructWebhookEvent(body, r.Header.Get("Stripe-Signature"))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid webhook signature")
+			return
+		}
+		// TODO: handle event types
+		switch event.Type {
+		case "checkout.session.completed":
+			// TODO: fulfill order
+		case "customer.subscription.deleted":
+			// TODO: deactivate subscription
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+{{- end}}
+
+{{- if .HasModule "auth"}}
+func clerkWebhookHandler(auth contracts.AuthService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// TODO: verify Svix signature and handle user lifecycle events
+		// event types: user.created, user.updated, user.deleted
+		w.WriteHeader(http.StatusOK)
+	}
+}
+{{- end}}
+
+// ── Response helpers ──────────────────────────────────────────────────────────
+
+// writeError writes a JSON error response: {"error": {"message": "..."}}.
+func writeError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	fmt.Fprintf(w, `{"error":{"message":%q}}`, msg)
+}
+
+// writeJSON writes a JSON success response wrapped in {"data": ...}.
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]any{"data": v})
+}
+
+// responseWriter wraps http.ResponseWriter to capture the status code.
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}

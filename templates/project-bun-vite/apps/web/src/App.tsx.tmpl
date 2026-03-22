@@ -1,0 +1,26 @@
+import { Routes, Route } from 'react-router-dom'
+import Home from './pages/Home'
+import Dashboard from './pages/Dashboard'{{- if .HasModule "auth"}}
+import ProtectedRoute from './components/ProtectedRoute'
+import SignIn from './pages/SignIn'{{- end}}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+{{- if .HasModule "auth"}}
+      <Route path="/sign-in" element={<SignIn />} />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+{{- else}}
+      <Route path="/dashboard" element={<Dashboard />} />
+{{- end}}
+    </Routes>
+  )
+}

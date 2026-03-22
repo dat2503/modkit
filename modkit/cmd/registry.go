@@ -10,8 +10,10 @@ import (
 
 // Registry represents the parsed orchestration/registry.yaml.
 type Registry struct {
-	Runtimes []RegistryRuntime `yaml:"runtimes"`
-	Modules  []RegistryModule  `yaml:"modules"`
+	DefaultRuntime  string          `yaml:"default_runtime"`
+	DefaultFrontend string          `yaml:"default_frontend"`
+	Runtimes        []RegistryRuntime `yaml:"runtimes"`
+	Modules         []RegistryModule  `yaml:"modules"`
 }
 
 // RegistryRuntime describes a supported backend runtime.

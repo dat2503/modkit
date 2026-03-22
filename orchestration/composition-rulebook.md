@@ -145,7 +145,7 @@ jobs  := initJobs(cfg, cache)
 
 ## §4 REST/OpenAPI Communication [MVP]
 
-All communication between the frontend (Next.js) and backend (Go/Bun) uses REST with an OpenAPI 3.1 specification as the single source of truth.
+All communication between the frontend (Vite/React or Next.js) and backend (Go/Bun) uses REST with an OpenAPI 3.1 specification as the single source of truth.
 
 **Workflow (spec-first):**
 1. Write `apps/api/openapi.yaml` first — all routes, request/response shapes, auth requirements
@@ -492,88 +492,125 @@ type InvoiceRepository interface {
 
 ---
 
-## §10 Frontend Structure [MVP]
+## §10a Frontend Structure — Vite + React [MVP, Default]
+
+The default frontend is **Vite + React** with React Router and TanStack Query.
 
 ```
 apps/web/
-├── app/
-│   ├── (auth)/               ← route group: authenticated routes
-│   │   ├── layout.tsx        ← auth guard + shell layout
-│   │   ├── dashboard/
-│   │   │   └── page.tsx
-│   │   └── invoices/
-│   │       ├── page.tsx
-│   │       ├── new/
-│   │       │   └── page.tsx
-│   │       └── [id]/
-│   │           └── page.tsx
-│   ├── (public)/             ← route group: unauthenticated routes
-│   │   └── pay/
-│   │       └── [token]/
-│   │           └── page.tsx
-│   ├── layout.tsx            ← root layout (providers)
-│   └── page.tsx              ← landing page
-├── components/
-│   ├── ui/                   ← generic, reusable components
-│   │   ├── button.tsx
-│   │   ├── input.tsx
-│   │   └── ...
-│   └── features/             ← feature-specific components
-│       ├── invoices/
-│       └── payments/
-├── lib/
-│   ├── api-client.ts         ← typed client generated from OpenAPI spec
-│   ├── auth.ts               ← auth module integration (Clerk hooks/helpers)
-│   └── utils.ts
-└── hooks/                    ← custom React hooks
-    ├── use-invoices.ts
-    └── use-payments.ts
+├── src/
+│   ├── main.tsx              ← entry point (BrowserRouter + QueryClientProvider)
+│   ├── App.tsx               ← root routes
+│   ├── index.css             ← Tailwind directives
+│   ├── pages/
+│   │   ├── Home.tsx          ← public landing page
+│   │   ├── Dashboard.tsx     ← protected dashboard
+│   │   ├── SignIn.tsx        ← auth sign-in (if auth module selected)
+│   │   └── ...               ← additional pages
+│   ├── components/
+│   │   ├── ProtectedRoute.tsx ← auth guard (redirects to /sign-in)
+│   │   ├── ui/               ← generic, reusable components
+│   │   └── features/         ← feature-specific components
+│   ├── lib/
+│   │   ├── api.ts            ← typed fetch client (api.get, api.post, etc.)
+│   │   └── auth.tsx          ← Better Auth React client (if auth module selected)
+│   └── hooks/                ← custom React hooks
+│       └── use-invoices.ts
+├── index.html                ← Vite entry HTML
+├── vite.config.ts            ← Vite config (proxy /api to backend)
+└── package.json
 ```
 
 **Data fetching rules:**
-- Use **server components** for initial page data (reduces client JS, enables streaming)
-- Use **client components** + SWR or React Query for interactive/real-time data
-- Never use `useEffect` + `fetch` for initial data — use server components
+- Use **TanStack Query** (`useQuery`, `useMutation`) for server data
+- Use `api.get()` / `api.post()` from `lib/api.ts` — never raw `fetch` in components
+- The Vite dev server proxies `/api/*` to the backend — no CORS issues in development
 
-**Auth in Next.js:**
+**Auth in Vite (Better Auth):**
 ```typescript
-// Server component — auth check
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
+// lib/auth.tsx
+import { createAuthClient } from 'better-auth/react'
+export const authClient = createAuthClient({ baseURL: import.meta.env.VITE_API_URL })
 
-export default async function DashboardPage() {
-  const { userId } = auth()
-  if (!userId) redirect('/sign-in')
+// ProtectedRoute — wraps any route that requires authentication
+import { Navigate } from 'react-router-dom'
+import { authClient } from '../lib/auth'
 
-  const data = await fetchDashboardData(userId)
-  return <Dashboard data={data} />
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { data: session, isPending } = authClient.useSession()
+  if (isPending) return null
+  if (!session) return <Navigate to="/sign-in" replace />
+  return <>{children}</>
 }
+
+// Dashboard — access current user
+const { data: session } = authClient.useSession()
+const user = session?.user
 ```
 
+**Routing pattern:**
 ```typescript
-// Client component — user info
-'use client'
-import { useUser } from '@clerk/nextjs'
-
-export function UserMenu() {
-  const { user } = useUser()
-  return <span>{user?.emailAddresses[0]?.emailAddress}</span>
-}
-```
-
-**API client usage:**
-```typescript
-// Generated typed client — never use raw fetch in components
-import { apiClient } from '@/lib/api-client'
-
-const { data: invoices } = await apiClient.GET('/api/v1/invoices')
+// App.tsx
+<Routes>
+  <Route path="/" element={<Home />} />
+  <Route path="/sign-in" element={<SignIn />} />
+  <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+  <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
+</Routes>
 ```
 
 **Rules:**
 - Never put API keys, secrets, or server-only config in frontend code
-- Never call the database directly from frontend code — always go through the API
-- Every page that requires auth must check it in the server component or layout
-- Use the typed API client generated from the OpenAPI spec — never raw `fetch` in components
+- Never call the database directly from frontend — always go through the API
+- Use `VITE_` prefix for env vars (not `NEXT_PUBLIC_`)
+- All protected routes must be wrapped in `<ProtectedRoute>`
+
+---
+
+## §10b Frontend Structure — Next.js [Alternative]
+
+Use `--frontend next` when the app requires server-side rendering, SEO-critical pages, or Next.js-specific features.
+
+```
+apps/web/
+├── src/
+│   └── app/
+│       ├── layout.tsx            ← root layout
+│       ├── page.tsx              ← landing page
+│       └── (protected)/
+│           ├── layout.tsx        ← auth guard (server-side session check)
+│           ├── dashboard/
+│           │   └── page.tsx
+│           └── invoices/
+│               └── page.tsx
+├── lib/
+│   ├── api.ts                    ← typed fetch client
+│   └── auth.ts                   ← Better Auth server-side helper
+└── package.json
+```
+
+**Auth in Next.js (Better Auth):**
+```typescript
+// lib/auth.ts — server-side auth instance
+import { betterAuth } from 'better-auth'
+export const auth = betterAuth({ ... })
+
+// (protected)/layout.tsx — server-side session check
+import { headers } from 'next/headers'
+import { auth } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+
+export default async function ProtectedLayout({ children }) {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session) redirect('/sign-in')
+  return <>{children}</>
+}
+```
+
+**Rules:**
+- Use server components for initial data — reduces client JS
+- Pages under `(protected)/` are automatically guarded by the layout
+- Use `NEXT_PUBLIC_` prefix for env vars exposed to the browser
 
 ---
 

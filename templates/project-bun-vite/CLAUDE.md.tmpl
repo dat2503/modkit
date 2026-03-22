@@ -1,0 +1,59 @@
+# {{.Name}} — Claude Code Instructions
+
+This project was scaffolded with [modkit](https://github.com/dat2503/modkit) using the Bun runtime.
+
+---
+
+## Project Structure
+
+```
+apps/
+  api/           ← Bun + Hono API (runtime: bun {{.BunVersion}})
+    src/
+      index.ts   ← Entry point, graceful shutdown
+      bootstrap.ts ← Module initialization (init order matters)
+      config.ts  ← Env-based config, loaded once at startup
+      router.ts  ← Hono router, middleware, routes
+  web/           ← Next.js frontend (TypeScript, Tailwind)
+infra/
+  docker-compose.yaml  ← Local dev infrastructure
+Makefile         ← All common tasks
+.env.example     ← Required environment variables
+.modkit.yaml     ← Module registry manifest
+```
+
+---
+
+## Selected Modules
+{{range .Modules}}
+- **{{.Name}}** — impl: `{{.Impl}}`
+{{- end}}
+
+---
+
+## Key Rules
+
+### API (Bun + Hono)
+- Config is loaded once in `loadConfig()` — never read env vars directly in handlers
+- All modules are initialized in `bootstrap.ts` in the correct order
+- HTTP handlers return `{"data": ...}` on success, `{"error": "..."}` on failure
+- Auth middleware reads Bearer token from `Authorization` header
+
+### Frontend (Next.js)
+- API client is in `src/lib/api.ts` — use `api.get()`, `api.post()` etc.
+- Auth is handled by Clerk — use `useUser()` hook for client components
+- All pages use the App Router (`src/app/`)
+
+### Development
+- `make setup` — install deps + start infra
+- `make dev` — start API + web concurrently
+- `make test` — run Bun tests
+- `make lint` — lint API + frontend
+
+---
+
+## Module Registry
+
+To add a module: `modkit pull <module-name>`
+To see available modules: `modkit list`
+To validate wiring: `modkit validate`

@@ -17,48 +17,69 @@ Do NOT use when:
 **Required:** `cache` — auth uses cache for session storage and token blacklisting.
 Always initialize cache before auth.
 
-## How to wire
+## Default: Better Auth
 
-### Go
+Better Auth (https://www.better-auth.com) is an open-source, self-hosted auth library.
+It runs inside your Bun backend process (or as a sidecar for Go). No external auth service required.
 
-1. Import the `AuthService` interface from `contracts/go/auth.go`
-2. Initialize in bootstrap **after** cache:
+### How to wire (Bun)
+
+1. Install Better Auth: `bun add better-auth`
+2. Create `apps/api/src/auth.ts` — configure the Better Auth instance:
+   ```typescript
+   import { betterAuth } from 'better-auth'
+   import { Pool } from 'pg'
+
+   export const auth = betterAuth({
+     database: new Pool({ connectionString: process.env.DATABASE_URL }),
+     secret: process.env.BETTER_AUTH_SECRET,
+     emailAndPassword: { enabled: true },
+     socialProviders: {
+       google: {
+         clientId: process.env.GOOGLE_CLIENT_ID!,
+         clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+       },
+     },
+   })
+   ```
+3. Mount the Better Auth handler on your Hono/Express app:
+   ```typescript
+   app.all('/api/auth/*', (c) => auth.handler(c.req.raw))
+   ```
+4. Initialize the `BetterAuthService` in bootstrap after cache:
+   ```typescript
+   import { BetterAuthService } from './modules/auth/better_auth'
+
+   const authSvc = new BetterAuthService({
+     baseUrl: config.auth.baseUrl,
+     secret: config.auth.secret,
+   }, cache)
+   ```
+5. Register middleware on protected routes:
+   ```typescript
+   app.use('/api/v1/*', authMiddleware(authSvc))
+   ```
+
+### How to wire (Go)
+
+For Go, the Better Auth server runs as part of the Bun frontend/auth service.
+The Go backend calls Better Auth's REST API endpoints.
+
+1. Initialize the service in bootstrap after cache:
    ```go
-   authSvc := clerk.New(clerk.Config{
-       SecretKey:      cfg.Auth.SecretKey,
-       PublishableKey: cfg.Auth.PublishableKey,
+   authSvc, err := betterauth.New(betterauth.Config{
+       BaseURL: cfg.Auth.BaseURL,    // e.g. "http://auth-service:3000"
+       Secret:  cfg.Auth.Secret,
    }, cacheSvc)
    ```
-3. Register the auth middleware on protected routes:
+2. Register the auth middleware on protected routes:
    ```go
    protected := router.Group("/api/v1", authMiddleware(authSvc))
    ```
-4. In handlers, extract the user from context:
-   ```go
-   user, err := authSvc.ValidateToken(ctx, tokenFromHeader(r))
-   ```
 
-### Bun (TypeScript)
+## Auth middleware pattern
 
-1. Import `IAuthService` from `contracts/ts/auth.ts`
-2. Initialize in bootstrap after cache:
-   ```typescript
-   const auth = new ClerkAuthService({
-     secretKey: config.auth.secretKey,
-     publishableKey: config.auth.publishableKey,
-   }, cache)
-   ```
-3. Register middleware on protected routes:
-   ```typescript
-   app.use('/api/v1/*', authMiddleware(auth))
-   ```
-4. In handlers, read the user from context:
-   ```typescript
-   const user = ctx.get('user') as AuthUser
-   ```
-
-## Middleware pattern (Go)
-
+### Go
 ```go
 func authMiddleware(auth contracts.AuthService) func(http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
@@ -76,73 +97,111 @@ func authMiddleware(auth contracts.AuthService) func(http.Handler) http.Handler 
 }
 ```
 
-## Clerk webhook handling
-
-Clerk emits webhook events for user lifecycle (created, updated, deleted).
-Always verify the webhook signature before processing:
-
-```go
-event, err := authSvc.ConstructWebhookEvent(body, r.Header.Get("Svix-Signature"))
-```
-
-Register a webhook endpoint in your Clerk dashboard:
-- URL: `POST /api/v1/webhooks/clerk`
-- Events: `user.created`, `user.updated`, `user.deleted`
-
-## Frontend (Next.js)
-
-Use Clerk's Next.js SDK for the frontend — it handles sign-in/sign-up UI:
+### TypeScript (Hono)
 ```typescript
-// apps/web — use @clerk/nextjs, not this module directly
-import { ClerkProvider, SignIn, SignUp } from '@clerk/nextjs'
+async function authMiddleware(auth: IAuthService, c: Context, next: Next) {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '') ?? ''
+  try {
+    const user = await auth.validateToken(token)
+    c.set('user', user)
+    await next()
+  } catch {
+    return c.json({ error: 'unauthorized' }, 401)
+  }
+}
 ```
 
-The backend auth module validates tokens issued by Clerk's frontend SDK.
+## Frontend integration
 
-### Protected routes
+### Vite + React (Better Auth)
+```typescript
+// apps/web/src/lib/auth.tsx
+import { createAuthClient } from 'better-auth/react'
 
-The generated project includes a protected layout at `src/app/(protected)/layout.tsx`. Any page placed under `src/app/(protected)/` is automatically guarded — unauthenticated users are redirected to `/sign-in`.
+export const authClient = createAuthClient({
+  baseURL: import.meta.env.VITE_API_URL,
+})
 
+// In your component:
+const { data: session } = authClient.useSession()
 ```
-src/app/
-  (protected)/
-    layout.tsx          ← auth guard (generated)
-    dashboard/page.tsx  ← protected
-    settings/page.tsx   ← protected
-  page.tsx              ← public landing page
+
+Use `authClient.signIn.email()`, `authClient.signUp.email()`, `authClient.signOut()` for auth actions.
+
+Protected route guard using `authClient.useSession()`:
+```tsx
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { data: session, isPending } = authClient.useSession()
+  if (isPending) return null
+  if (!session) return <Navigate to="/sign-in" replace />
+  return <>{children}</>
+}
 ```
 
-**Do NOT** add per-page auth checks in protected routes — the layout handles it. Only add auth checks in pages outside `(protected)/` if they need conditional auth behavior.
+### Next.js (Better Auth)
+```typescript
+// Use better-auth/next-js for server-side session checks
+import { auth } from '@/auth'
+import { headers } from 'next/headers'
+
+const session = await auth.api.getSession({ headers: await headers() })
+if (!session) redirect('/sign-in')
+```
+
+## Alternative: Clerk
+
+If you need managed auth with prebuilt UI components, organizations, and enterprise SSO, use Clerk instead:
+```
+--modules auth:clerk
+```
+
+Clerk wiring (Bun):
+```typescript
+const auth = new ClerkAuthService({
+  secretKey: config.auth.secretKey,
+  publishableKey: config.auth.publishableKey,
+}, cache)
+```
+
+Clerk wiring (Go):
+```go
+authSvc, err := clerk.New(clerk.Config{
+    SecretKey:      cfg.Auth.SecretKey,
+    PublishableKey: cfg.Auth.PublishableKey,
+}, cacheSvc)
+```
 
 ## Cache key usage
 
-The auth module uses the cache module for session storage and token management. Here are the exact keys it writes:
-
 | Key pattern | TTL | Purpose |
 |---|---|---|
-| `sessions:{sessionID}` | 24h | Clerk session data cached to avoid repeated API calls |
-| `auth:user:{userID}` | 15m | Cached user profile to reduce Clerk lookups |
+| `sessions:{sessionID}` | 24h | Session data cached to avoid repeated API calls |
+| `auth:user:{userID}` | 15m | Cached user profile to reduce auth provider lookups |
 | `auth:blacklist:{tokenJTI}` | matches token expiry | Revoked tokens — checked on every `ValidateToken` call |
-
-**If cache is unavailable:**
-- `ValidateToken` falls back to direct Clerk API call (slower but functional)
-- Session cache misses result in a Clerk API round-trip per request
-- Token blacklist misses mean revoked tokens may remain valid until natural expiry
 
 **Namespacing:** All auth keys use the `sessions:` or `auth:` prefix. Do not use these prefixes for application-level cache keys.
 
 ## Required env vars
 
+**Better Auth (default):**
+```
+AUTH_PROVIDER=better-auth
+BETTER_AUTH_URL=http://localhost:3000     # URL where Better Auth runs
+BETTER_AUTH_SECRET=...                   # generate: openssl rand -hex 32
+```
+
+**Clerk (alternative):**
 ```
 AUTH_PROVIDER=clerk
-CLERK_SECRET_KEY=sk_test_...         # sensitive
+CLERK_SECRET_KEY=sk_test_...             # sensitive
 CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_WEBHOOK_SECRET=whsec_...       # sensitive, only if using webhooks
+CLERK_WEBHOOK_SECRET=whsec_...           # sensitive, only if using webhooks
 ```
 
 ## Do NOT
 
-- Store passwords — Clerk handles all credential storage
+- Store passwords — Better Auth handles all credential storage
 - Bypass token validation in handlers — always use the middleware
-- Read `CLERK_SECRET_KEY` directly in handler code — inject via constructor
-- Share the secret key with the frontend — publishable key only
+- Read `BETTER_AUTH_SECRET` directly in handler code — inject via constructor
+- Share the secret with the frontend — use the Better Auth React client only
+- Call Better Auth admin endpoints from the frontend — server-side only

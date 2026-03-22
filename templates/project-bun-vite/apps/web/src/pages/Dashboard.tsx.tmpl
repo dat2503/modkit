@@ -1,0 +1,23 @@
+{{- if .HasModule "auth"}}
+import { authClient } from '../lib/auth'
+
+{{- end}}
+export default function Dashboard() {
+{{- if .HasModule "auth"}}
+  const { data: session } = authClient.useSession()
+
+  return (
+    <main className="p-8">
+      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <p className="mt-2 text-gray-600">Welcome, {session?.user?.name ?? 'User'}.</p>
+    </main>
+  )
+{{- else}}
+  return (
+    <main className="p-8">
+      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <p className="mt-2 text-gray-600">Welcome to your dashboard.</p>
+    </main>
+  )
+{{- end}}
+}

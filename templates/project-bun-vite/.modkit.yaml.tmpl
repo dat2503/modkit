@@ -1,0 +1,12 @@
+name: {{.Name}}
+runtime: bun
+frontend: {{.Frontend}}
+bun_version: "{{.BunVersion}}"
+registry: github.com/dat2503/modkit
+registry_version: "{{.RegistryVersion}}"
+
+modules:
+{{- range .Modules}}
+  - name: {{.Name}}
+    impl: {{.Impl}}
+{{- end}}

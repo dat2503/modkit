@@ -1,0 +1,7 @@
+module {{.GoModule}}
+
+go {{.GoVersion}}
+
+require github.com/dat2503/modkit v0.0.0
+
+replace github.com/dat2503/modkit v0.0.0 => {{.RegistryPath}}

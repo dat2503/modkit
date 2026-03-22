@@ -1,0 +1,47 @@
+---
+description: Add a module to this modkit project
+---
+
+Add a new module to this project.
+
+## Steps
+
+1. **Read current state**
+   - Read `.modkit.yaml` to see current modules and runtime
+   - Read `~/.modkit/cache/orchestration/registry.yaml` to see all available modules
+
+2. **Select module**
+   - Show the user which modules are available but not yet included
+   - Ask which module to add (and which implementation if multiple exist)
+   - Read the module's AGENT.md: `~/.modkit/cache/modules/{name}/docs/AGENT.md`
+
+3. **Copy implementation**
+   - Copy files from `~/.modkit/cache/modules/{name}/impl/{impl}-go/` into `apps/api/modules/{name}/`
+
+4. **Wire bootstrap**
+   - Edit `apps/api/bootstrap/bootstrap.go`:
+     - Add import: `{name}pkg "{{.GoModule}}/modules/{name}"`
+     - Add initialization in the correct order (composition-rulebook §3):
+       1. observability (first)
+       2. error-tracking (second)
+       3. cache (before auth and jobs)
+       4. auth (after cache)
+       5. remaining modules in any order
+     - Add to `api.Deps{}` struct
+
+5. **Wire config**
+   - Edit `apps/api/config/config.go`:
+     - Add config struct for the module
+     - Add env var loading in `Load()`
+   - Update `.env.example` with new required env vars
+
+6. **Update manifest**
+   - Add the module to `.modkit.yaml`
+
+7. **Verify**
+   - Run: `cd apps/api && go build ./...`
+   - Report success or fix any compilation errors
+
+8. **Report**
+   - Summarize what was added
+   - List any manual steps (e.g., "Sign up for Stripe and add STRIPE_SECRET_KEY to .env")

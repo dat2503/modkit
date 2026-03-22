@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\": \"MODKIT: Before finishing, run /validate to check module wiring. Verify: 1) Bootstrap init order, 2) All env vars in .env.example, 3) go build ./... passes.\"}'",
+            "shell": "bash"
+          }
+        ]
+      }
+    ]
+  }
+}

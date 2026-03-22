@@ -1,0 +1,29 @@
+{{- if .HasModule "auth"}}
+import { Navigate } from 'react-router-dom'
+import { authClient } from '../lib/auth'
+
+interface ProtectedRouteProps {
+  children: React.ReactNode
+}
+
+export default function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const { data: session, isPending } = authClient.useSession()
+
+  if (isPending) return null
+
+  if (!session) {
+    return <Navigate to="/sign-in" replace />
+  }
+
+  return <>{children}</>
+}
+{{- else}}
+// ProtectedRoute — add auth module to enable route protection.
+interface ProtectedRouteProps {
+  children: React.ReactNode
+}
+
+export default function ProtectedRoute({ children }: ProtectedRouteProps) {
+  return <>{children}</>
+}
+{{- end}}

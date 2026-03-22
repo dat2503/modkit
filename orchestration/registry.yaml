@@ -6,6 +6,9 @@
 # phase: v2    — available but not included in MVP by default
 # phase: later — not yet implemented, coming soon
 
+default_runtime: bun
+default_frontend: vite
+
 # ─────────────────────────────────────────
 # RUNTIMES
 # ─────────────────────────────────────────
@@ -14,7 +17,7 @@ runtimes:
   - name: go
     label: "Go"
     phase: mvp
-    template: templates/project-go
+    template: templates/project-go-{frontend}
     contracts: contracts/go
     build_cmd: "go build ./..."
     test_cmd: "go test ./..."
@@ -26,14 +29,33 @@ runtimes:
   - name: bun
     label: "Bun (TypeScript)"
     phase: mvp
-    template: templates/project-bun
+    default: true
+    template: templates/project-bun-{frontend}
     contracts: contracts/ts
     build_cmd: "bun build"
     test_cmd: "bun test"
     lint_cmd: "bunx eslint . --ext .ts"
     docker_base: "oven/bun:1.1-alpine"
     bun_version: "1.1"
-    notes: "Recommended for teams preferring TypeScript end-to-end (shared types with frontend)"
+    notes: "Default. Recommended for TypeScript end-to-end (shared types with frontend)"
+
+# ─────────────────────────────────────────
+# FRONTENDS
+# ─────────────────────────────────────────
+
+frontends:
+  - name: vite
+    label: "Vite + React"
+    phase: mvp
+    default: true
+    template_suffix: vite
+    notes: "Default. Fast dev server, React with react-router-dom and TanStack Query."
+
+  - name: next
+    label: "Next.js"
+    phase: mvp
+    template_suffix: next
+    notes: "Server-side rendering, App Router, React Server Components."
 
 # ─────────────────────────────────────────
 # MODULES
@@ -103,7 +125,7 @@ modules:
     interface_ts: contracts/ts/auth.ts
     config_schema: modules/auth/config.schema.json
     agent_docs: modules/auth/docs/AGENT.md
-    default_impl: clerk
+    default_impl: better-auth
     status: stable
     dependencies:
       required: [cache]
@@ -112,12 +134,18 @@ modules:
       - "app has user accounts"
       - "any route requires authentication"
     implementations:
+      - name: better-auth
+        label: "Better Auth"
+        runtimes:
+          go: modules/auth/impl/better-auth-go
+          bun: modules/auth/impl/better-auth-ts
+        notes: "Default. Self-hosted, open-source. No external service dependency."
       - name: clerk
         label: "Clerk"
         runtimes:
           go: modules/auth/impl/clerk-go
           bun: modules/auth/impl/clerk-ts
-        notes: "Recommended. Managed auth with UI components."
+        notes: "Managed auth with UI components. Use when you need enterprise SSO or prebuilt UI."
       - name: privy
         label: "Privy"
         runtimes:

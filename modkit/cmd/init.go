@@ -13,6 +13,7 @@ import (
 var (
 	initName       string
 	initRuntime    string
+	initFrontend   string
 	initModules    []string
 	initGoModule   string
 	initGoVersion  string
@@ -43,7 +44,8 @@ Exit codes:
 
 func init() {
 	initCmd.Flags().StringVar(&initName, "name", "", "Project name (required)")
-	initCmd.Flags().StringVar(&initRuntime, "runtime", "", `Backend runtime: "go" or "bun" (required)`)
+	initCmd.Flags().StringVar(&initRuntime, "runtime", "", `Backend runtime: "go" or "bun" (default: bun)`)
+	initCmd.Flags().StringVar(&initFrontend, "frontend", "", `Frontend framework: "vite" or "next" (default: vite)`)
 	initCmd.Flags().StringSliceVar(&initModules, "modules", nil,
 		`Comma-separated list of module names to include (e.g. auth,payments,email)`)
 	initCmd.Flags().StringVar(&initGoModule, "go-module", "", `Go module path (e.g. github.com/user/my-app); required when --runtime=go`)
@@ -52,22 +54,51 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	// 1. Validate required flags.
+	// 1. Load registry first so we can use defaults.
+	regFile := filepath.Join(registryPath, "orchestration", "registry.yaml")
+	reg, err := loadRegistry(regFile)
+	if err != nil {
+		return fmt.Errorf("load registry from %s: %w", regFile, err)
+	}
+
+	// 2. Validate / prompt for required flags.
 	if initName == "" {
 		if noPrompt {
 			return configError("--name is required")
 		}
 		initName = prompt("Project name: ")
 	}
+
 	if initRuntime == "" {
-		if noPrompt {
-			return configError("--runtime is required (go or bun)")
+		defaultRuntime := reg.DefaultRuntime
+		if defaultRuntime == "" {
+			defaultRuntime = "bun"
 		}
-		initRuntime = prompt("Runtime (go/bun): ")
+		if noPrompt {
+			initRuntime = defaultRuntime
+		} else {
+			initRuntime = promptDefault(fmt.Sprintf("Runtime (go/bun) [%s]: ", defaultRuntime), defaultRuntime)
+		}
 	}
 	if initRuntime != "go" && initRuntime != "bun" {
 		return configError(fmt.Sprintf("invalid runtime %q — must be \"go\" or \"bun\"", initRuntime))
 	}
+
+	if initFrontend == "" {
+		defaultFrontend := reg.DefaultFrontend
+		if defaultFrontend == "" {
+			defaultFrontend = "vite"
+		}
+		if noPrompt {
+			initFrontend = defaultFrontend
+		} else {
+			initFrontend = promptDefault(fmt.Sprintf("Frontend (vite/next) [%s]: ", defaultFrontend), defaultFrontend)
+		}
+	}
+	if initFrontend != "vite" && initFrontend != "next" {
+		return configError(fmt.Sprintf("invalid frontend %q — must be \"vite\" or \"next\"", initFrontend))
+	}
+
 	if initRuntime == "go" && initGoModule == "" {
 		if noPrompt {
 			return configError("--go-module is required when --runtime=go")
@@ -75,16 +106,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		initGoModule = prompt("Go module path (e.g. github.com/org/project): ")
 	}
 
-	// 2. Ensure output directory doesn't already exist.
+	// 3. Ensure output directory doesn't already exist.
 	if _, err := os.Stat(initName); err == nil {
 		return fmt.Errorf("directory %q already exists", initName)
-	}
-
-	// 3. Load registry.
-	regFile := filepath.Join(registryPath, "orchestration", "registry.yaml")
-	reg, err := loadRegistry(regFile)
-	if err != nil {
-		return fmt.Errorf("load registry from %s: %w", regFile, err)
 	}
 
 	// 4. Resolve modules.
@@ -104,6 +128,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	data := TemplateData{
 		Name:            initName,
 		Modules:         modules,
+		Frontend:        initFrontend,
 		GoModule:        initGoModule,
 		GoVersion:       initGoVersion,
 		BunVersion:      initBunVersion,
@@ -112,11 +137,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// 6. Process templates.
-	templateDir := filepath.Join(registryPath, "templates", "project-"+initRuntime)
+	templateDir := filepath.Join(registryPath, "templates", "project-"+initRuntime+"-"+initFrontend)
 	if _, err := os.Stat(templateDir); os.IsNotExist(err) {
-		return fmt.Errorf("template directory not found: %s", templateDir)
+		// Fallback to legacy template path (project-{runtime}) for backwards compatibility.
+		legacyDir := filepath.Join(registryPath, "templates", "project-"+initRuntime)
+		if _, lerr := os.Stat(legacyDir); os.IsNotExist(lerr) {
+			return fmt.Errorf("template directory not found: %s", templateDir)
+		}
+		templateDir = legacyDir
 	}
-	fmt.Printf("Scaffolding %q (runtime: %s)...\n", initName, initRuntime)
+	fmt.Printf("Scaffolding %q (runtime: %s, frontend: %s)...\n", initName, initRuntime, initFrontend)
 	if err := processTemplates(templateDir, initName, data); err != nil {
 		return fmt.Errorf("process templates: %w", err)
 	}
@@ -136,9 +166,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// 9. Output summary.
 	if outputFormat == "json" {
-		return printInitJSON(initName, initRuntime, modules)
+		return printInitJSON(initName, initRuntime, initFrontend, modules)
 	}
-	printInitTable(initName, initRuntime, modules)
+	printInitTable(initName, initRuntime, initFrontend, modules)
 	return nil
 }
 
@@ -154,6 +184,15 @@ func prompt(label string) string {
 	fmt.Print(label)
 	var s string
 	fmt.Scanln(&s)
+	return s
+}
+
+// promptDefault reads a line from stdin, returning defaultVal if the user enters nothing.
+func promptDefault(label, defaultVal string) string {
+	s := prompt(label)
+	if s == "" {
+		return defaultVal
+	}
 	return s
 }
 
@@ -195,9 +234,10 @@ func splitCommand(s string) []string {
 	return parts
 }
 
-func printInitTable(name, runtime string, modules []ScaffoldModule) {
+func printInitTable(name, runtime, frontend string, modules []ScaffoldModule) {
 	fmt.Printf("\n✓ Created project %q\n\n", name)
 	fmt.Printf("  Runtime:  %s\n", runtime)
+	fmt.Printf("  Frontend: %s\n", frontend)
 	fmt.Printf("  Modules:\n")
 	for _, m := range modules {
 		fmt.Printf("    %-20s %s\n", m.Name, m.Impl)
@@ -209,7 +249,7 @@ func printInitTable(name, runtime string, modules []ScaffoldModule) {
 	fmt.Printf("  make dev               # start API + web\n")
 }
 
-func printInitJSON(name, runtime string, modules []ScaffoldModule) error {
+func printInitJSON(name, runtime, frontend string, modules []ScaffoldModule) error {
 	type modJSON struct {
 		Name string `json:"name"`
 		Impl string `json:"impl"`
@@ -219,10 +259,11 @@ func printInitJSON(name, runtime string, modules []ScaffoldModule) error {
 		mods[i] = modJSON{Name: m.Name, Impl: m.Impl}
 	}
 	out := map[string]any{
-		"name":    name,
-		"runtime": runtime,
-		"modules": mods,
-		"path":    name,
+		"name":     name,
+		"runtime":  runtime,
+		"frontend": frontend,
+		"modules":  mods,
+		"path":     name,
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

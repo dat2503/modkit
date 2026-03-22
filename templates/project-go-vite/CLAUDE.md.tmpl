@@ -1,0 +1,81 @@
+# {{.Name}} — Claude Code Instructions
+
+This project was scaffolded with [modkit](https://github.com/dat2503/modkit) using the Go runtime.
+
+---
+
+## Project Structure
+
+```
+apps/
+  api/           ← Go API (runtime: go {{.GoVersion}})
+    main.go      ← Entry point, graceful shutdown
+    bootstrap/   ← Module initialization (init order matters)
+    config/      ← Env-based config, loaded once at startup
+    api/         ← HTTP router, middleware, handlers
+  web/           ← Next.js frontend (TypeScript, Tailwind)
+infra/
+  docker-compose.yaml  ← Local dev infrastructure
+Makefile         ← All common tasks
+.env.example     ← Required environment variables
+.modkit.yaml     ← Module registry manifest
+```
+
+---
+
+## Selected Modules
+{{range .Modules}}
+- **{{.Name}}** — impl: `{{.Impl}}`
+{{- end}}
+
+---
+
+## Key Rules
+
+### API (Go)
+- Config is loaded once in `config.Load()` — never read env vars directly in handlers
+- All modules are initialized in `bootstrap/bootstrap.go` in the correct order
+- HTTP handlers return `{"data": ...}` on success, `{"error": "..."}` on failure
+- Auth middleware reads Bearer token from `Authorization` header, puts user in context
+- Use `api.UserFromContext(r.Context())` to get the authenticated user in handlers
+
+### Frontend (Next.js)
+- API client is in `src/lib/api.ts` — use `api.get()`, `api.post()` etc.
+- Auth is handled by Clerk — use `useUser()` hook for client components
+- All pages use the App Router (`src/app/`)
+
+### Database
+- Migrations are in `apps/api/migrations/` (SQL files)
+- Run `make migrate` to apply migrations
+- Use `make migrate-create` to create a new migration
+
+### Development
+- `make setup` — install deps + start infra
+- `make dev` — start API + web concurrently
+- `make test` — run Go tests
+- `make lint` — lint Go + TypeScript
+
+---
+
+## Skills
+
+This project includes Claude Code skills for common operations:
+
+- `/add-module` — add a new module from the registry to this project
+- `/validate` — verify all modules are correctly wired
+
+---
+
+## Composition Rules
+
+When making changes, follow these rules (from the modkit composition rulebook):
+
+- **Interface-first**: Application code depends on contracts, never on concrete implementations
+- **Constructor injection**: All modules receive dependencies via constructor, not globals
+- **Init order**: observability → error-tracking → cache → auth → remaining
+- **Config via env**: All config comes from environment variables loaded in `config.Load()`
+- **Response envelope**: All API responses use `{"data": ...}` or `{"error": ...}` format
+- **Context propagation**: Pass `context.Context` through all module calls
+- **Parameterized queries**: Never use string concatenation in SQL
+
+For the full rulebook: `~/.modkit/cache/orchestration/composition-rulebook.md`

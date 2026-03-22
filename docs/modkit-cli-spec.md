@@ -67,27 +67,39 @@ modkit init [flags]
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--name`, `-n` | ✅ | Project name (used for directory name) |
-| `--runtime`, `-r` | ✅ | Backend runtime: `go` or `bun` |
+| `--runtime`, `-r` | ❌ | Backend runtime: `go` or `bun` (default: `bun`) |
+| `--frontend`, `-f` | ❌ | Frontend framework: `vite` or `next` (default: `vite`) |
 | `--modules`, `-m` | ❌ | Comma-separated `module:impl` pairs. If omitted and `--no-prompt` is not set, interactive selector is shown |
 | `--go-module` | ❌ | Go module path (e.g., `github.com/org/project`). Go runtime only. |
-| `--no-prompt` | ❌ | Non-interactive mode — fails if required info is missing |
+| `--no-prompt` | ❌ | Non-interactive mode — uses defaults for unspecified flags |
 
 **Examples:**
 
 ```bash
-# Interactive — choose modules via prompt
-modkit init --name myapp --runtime go
+# Interactive — uses defaults (bun + vite)
+modkit init --name myapp
 
-# Non-interactive (agent use)
+# Non-interactive with defaults (bun + vite + better-auth)
+modkit init \
+  --name invoicely \
+  --modules auth,payments:stripe,email:resend \
+  --no-prompt
+
+# Go backend + Vite frontend
 modkit init \
   --name invoicely \
   --runtime go \
+  --frontend vite \
   --go-module github.com/myorg/invoicely \
-  --modules auth:clerk,payments:stripe,email:resend,storage:s3,cache:redis,jobs:asynq,observability:otel,error-tracking:sentry \
+  --modules auth,payments:stripe,email:resend \
   --no-prompt
 
-# Bun runtime
-modkit init --name invoicely --runtime bun \
+# Go backend + Next.js frontend with Clerk auth
+modkit init \
+  --name invoicely \
+  --runtime go \
+  --frontend next \
+  --go-module github.com/myorg/invoicely \
   --modules auth:clerk,payments:stripe \
   --no-prompt
 ```

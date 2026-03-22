@@ -1,0 +1,88 @@
+.PHONY: dev build test lint type-check migrate infra-up infra-down deps
+
+# ── Dev ──────────────────────────────────────────────────────────────────────
+
+dev:
+	@echo "Starting API (:8080) and web (:3000)..."
+	@cd apps/api && go run . & cd apps/web && npm run dev
+
+dev-api:
+	@if command -v air >/dev/null 2>&1; then \
+		air -c .air.toml; \
+	else \
+		echo "tip: install air for hot reload — go install github.com/air-verse/air@latest"; \
+		cd apps/api && go run .; \
+	fi
+
+dev-web:
+	cd apps/web && npm run dev
+
+# ── Build ─────────────────────────────────────────────────────────────────────
+
+build:
+	$(MAKE) build-api
+	$(MAKE) build-web
+
+build-api:
+	cd apps/api && go build -o bin/api .
+
+build-web:
+	cd apps/web && npm run build
+
+# ── Test ──────────────────────────────────────────────────────────────────────
+
+test:
+	cd apps/api && go test ./...
+
+test-verbose:
+	cd apps/api && go test -v ./...
+
+# ── Lint ──────────────────────────────────────────────────────────────────────
+
+lint:
+	cd apps/api && go vet ./...
+	cd apps/web && npm run lint
+
+type-check:
+	cd apps/web && npm run type-check
+
+# ── Database ──────────────────────────────────────────────────────────────────
+
+migrate:
+	cd apps/api && go run ./cmd/migrate up
+
+migrate-down:
+	cd apps/api && go run ./cmd/migrate down
+
+migrate-create:
+	@read -p "Migration name: " name; \
+	cd apps/api && go run ./cmd/migrate create $${name}
+
+# ── Infrastructure ────────────────────────────────────────────────────────────
+
+infra-up:
+	docker compose -f infra/docker-compose.yaml up -d
+
+infra-down:
+	docker compose -f infra/docker-compose.yaml down
+
+infra-logs:
+	docker compose -f infra/docker-compose.yaml logs -f
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+
+deps:
+	cd apps/api && go mod download
+	cd apps/web && npm install
+
+# ── Setup ─────────────────────────────────────────────────────────────────────
+
+setup:
+	@echo "Installing web dependencies..."
+	cd apps/web && npm install
+	@echo "Downloading Go modules..."
+	cd apps/api && go mod download
+	@echo "Starting infrastructure..."
+	$(MAKE) infra-up
+	@echo ""
+	@echo "Setup complete. Run 'make dev' to start."
