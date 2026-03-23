@@ -70,7 +70,7 @@ export async function bootstrap(): Promise<{ app: Hono; shutdown: () => Promise<
 
   // 4. Auth — after cache
 {{- if eq (.ImplFor "auth") "better-auth"}}
-  const auth = new BetterAuthService({ baseUrl: cfg.betterAuthUrl, secret: cfg.betterAuthSecret })
+  const auth = new BetterAuthService({ baseUrl: cfg.betterAuthUrl, secret: cfg.betterAuthSecret }, cache)
 {{- else if eq (.ImplFor "auth") "clerk"}}
   const auth = new ClerkAuthService({ secretKey: cfg.clerkSecretKey })
 {{- end}}

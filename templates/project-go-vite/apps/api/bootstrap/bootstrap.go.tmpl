@@ -93,11 +93,18 @@ func Init(ctx context.Context) (http.Handler, func(context.Context), error) {
 
 	// ── 4. Auth (after cache) ────────────────────────────────────────────────
 	{{- if .HasModule "auth"}}
+	{{- if eq (.ImplFor "auth") "better-auth"}}
+	authSvc, err := authpkg.New(authpkg.Config{
+		BaseURL: cfg.Auth.BaseURL,
+		Secret:  cfg.Auth.Secret,
+	}, cacheSvc)
+	{{- else if eq (.ImplFor "auth") "clerk"}}
 	authSvc, err := authpkg.New(authpkg.Config{
 		SecretKey:      cfg.Auth.SecretKey,
 		PublishableKey: cfg.Auth.PublishableKey,
 		WebhookSecret:  cfg.Auth.WebhookSecret,
 	}, cacheSvc)
+	{{- end}}
 	if err != nil {
 		return nil, nil, fmt.Errorf("init auth: %w", err)
 	}
