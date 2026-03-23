@@ -82,7 +82,11 @@ func NewRouter(deps Deps) http.Handler {
 	{{- end}}
 
 	{{- if .HasModule "auth"}}
+	{{- if eq (.ImplFor "auth") "better-auth"}}
+	// Better Auth handles its own routes — no webhook registration needed
+	{{- else if eq (.ImplFor "auth") "clerk"}}
 	mux.HandleFunc("POST /api/v1/webhooks/clerk", clerkWebhookHandler(deps.Auth))
+	{{- end}}
 	{{- end}}
 
 	return handler

@@ -7,7 +7,12 @@ export interface Config {
   redisUrl: string
 {{- end}}
 {{- if .HasModule "auth"}}
+{{- if eq (.ImplFor "auth") "better-auth"}}
+  betterAuthUrl: string
+  betterAuthSecret: string
+{{- else if eq (.ImplFor "auth") "clerk"}}
   clerkSecretKey: string
+{{- end}}
 {{- end}}
 {{- if .HasModule "payments"}}
   stripeSecretKey: string
@@ -40,7 +45,10 @@ export interface Config {
 }
 
 export function loadConfig(): Config {
+  const appEnv = process.env.APP_ENV ?? 'development'
+  const isDev = appEnv === 'development'
   const missing: string[] = []
+  const warned: string[] = []
 
   function require(name: string): string {
     const val = process.env[name]
@@ -52,45 +60,68 @@ export function loadConfig(): Config {
     return process.env[name] ?? fallback
   }
 
+  // In development, treat service keys as optional — the app boots but the
+  // module will be non-functional until the key is provided.
+  function requireService(name: string): string {
+    const val = process.env[name]
+    if (!val && isDev) {
+      warned.push(name)
+      return ''
+    }
+    if (!val) missing.push(name)
+    return val ?? ''
+  }
+
   const cfg: Config = {
     port: parseInt(optional('PORT', '8080'), 10),
-    appEnv: optional('APP_ENV', 'development'),
+    appEnv,
     databaseUrl: require('DATABASE_URL'),
     allowedOrigins: optional('ALLOWED_ORIGINS', '*'),
 {{- if .HasModule "cache"}}
     redisUrl: require('REDIS_URL'),
 {{- end}}
 {{- if .HasModule "auth"}}
-    clerkSecretKey: require('CLERK_SECRET_KEY'),
+{{- if eq (.ImplFor "auth") "better-auth"}}
+    betterAuthUrl: optional('BETTER_AUTH_URL', 'http://localhost:8080'),
+    betterAuthSecret: requireService('BETTER_AUTH_SECRET'),
+{{- else if eq (.ImplFor "auth") "clerk"}}
+    clerkSecretKey: requireService('CLERK_SECRET_KEY'),
+{{- end}}
 {{- end}}
 {{- if .HasModule "payments"}}
-    stripeSecretKey: require('STRIPE_SECRET_KEY'),
-    stripeWebhookSecret: require('STRIPE_WEBHOOK_SECRET'),
+    stripeSecretKey: requireService('STRIPE_SECRET_KEY'),
+    stripeWebhookSecret: requireService('STRIPE_WEBHOOK_SECRET'),
 {{- end}}
 {{- if .HasModule "email"}}
-    resendApiKey: require('RESEND_API_KEY'),
-    emailFrom: require('EMAIL_FROM'),
+    resendApiKey: requireService('RESEND_API_KEY'),
+    emailFrom: optional('EMAIL_FROM', 'noreply@localhost'),
 {{- end}}
 {{- if .HasModule "storage"}}
-    awsAccessKeyId: require('AWS_ACCESS_KEY_ID'),
-    awsSecretAccessKey: require('AWS_SECRET_ACCESS_KEY'),
+    awsAccessKeyId: requireService('AWS_ACCESS_KEY_ID'),
+    awsSecretAccessKey: requireService('AWS_SECRET_ACCESS_KEY'),
     awsRegion: optional('AWS_REGION', 'us-east-1'),
-    s3Bucket: require('S3_BUCKET'),
+    s3Bucket: requireService('S3_BUCKET'),
 {{- end}}
 {{- if .HasModule "observability"}}
     otelServiceName: optional('OTEL_SERVICE_NAME', '{{.Name}}'),
     otelEndpoint: optional('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://localhost:4317'),
 {{- end}}
 {{- if .HasModule "error-tracking"}}
-    sentryDsn: require('SENTRY_DSN'),
+    sentryDsn: requireService('SENTRY_DSN'),
     sentryEnvironment: optional('SENTRY_ENVIRONMENT', 'development'),
 {{- end}}
 {{- if .HasModule "feature-flags"}}
-    flagsmithServerApiKey: require('FLAGSMITH_SERVER_API_KEY'),
+    flagsmithServerApiKey: requireService('FLAGSMITH_SERVER_API_KEY'),
 {{- end}}
 {{- if .HasModule "search"}}
     elasticsearchUrl: optional('ELASTICSEARCH_URL', 'http://localhost:9200'),
 {{- end}}
+  }
+
+  if (warned.length > 0) {
+    console.warn(
+      `[config] DEV MODE: missing service keys (modules will be non-functional): ${warned.join(', ')}`
+    )
   }
 
   if (missing.length > 0) {

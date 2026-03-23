@@ -2,37 +2,41 @@ import { Hono } from 'hono'
 import { loadConfig } from './config'
 import { newRouter } from './router'
 {{- if .HasModule "observability"}}
-import { OtelObservabilityService } from '../../../modules/observability/impl/otel-ts/otel'
+import { OtelObservabilityService } from '../modules/observability/otel'
 {{- end}}
 {{- if .HasModule "error-tracking"}}
-import { SentryErrorTrackingService } from '../../../modules/error-tracking/impl/sentry-ts/sentry'
+import { SentryErrorTrackingService } from '../modules/error-tracking/sentry'
 {{- end}}
 {{- if .HasModule "cache"}}
-import { RedisCacheService } from '../../../modules/cache/impl/redis-ts/redis'
+import { RedisCacheService } from '../modules/cache/redis'
 {{- end}}
 {{- if .HasModule "auth"}}
-import { ClerkAuthService } from '../../../modules/auth/impl/clerk-ts/clerk'
+{{- if eq (.ImplFor "auth") "better-auth"}}
+import { BetterAuthService } from '../modules/auth/better_auth'
+{{- else if eq (.ImplFor "auth") "clerk"}}
+import { ClerkAuthService } from '../modules/auth/clerk'
+{{- end}}
 {{- end}}
 {{- if .HasModule "payments"}}
-import { StripePaymentsService } from '../../../modules/payments/impl/stripe-ts/stripe'
+import { StripePaymentsService } from '../modules/payments/stripe'
 {{- end}}
 {{- if .HasModule "email"}}
-import { ResendEmailService } from '../../../modules/email/impl/resend-ts/resend'
+import { ResendEmailService } from '../modules/email/resend'
 {{- end}}
 {{- if .HasModule "storage"}}
-import { S3StorageService } from '../../../modules/storage/impl/s3-ts/s3'
+import { S3StorageService } from '../modules/storage/s3'
 {{- end}}
 {{- if .HasModule "jobs"}}
-import { BullMQJobsService } from '../../../modules/jobs/impl/bullmq-ts/bullmq'
+import { BullMQJobsService } from '../modules/jobs/bullmq'
 {{- end}}
 {{- if .HasModule "realtime"}}
-import { WebSocketRealtimeService } from '../../../modules/realtime/impl/websocket-ts/websocket'
+import { WebSocketRealtimeService } from '../modules/realtime/websocket'
 {{- end}}
 {{- if .HasModule "search"}}
-import { ElasticsearchSearchService } from '../../../modules/search/impl/elasticsearch-ts/elasticsearch'
+import { ElasticsearchSearchService } from '../modules/search/elasticsearch'
 {{- end}}
 {{- if .HasModule "feature-flags"}}
-import { FlagsmithFeatureFlagsService } from '../../../modules/feature-flags/impl/flagsmith-ts/flagsmith'
+import { FlagsmithFeatureFlagsService } from '../modules/feature-flags/flagsmith'
 {{- end}}
 
 export async function bootstrap(): Promise<{ app: Hono; shutdown: () => Promise<void> }> {
@@ -65,7 +69,11 @@ export async function bootstrap(): Promise<{ app: Hono; shutdown: () => Promise<
 {{- if .HasModule "auth"}}
 
   // 4. Auth — after cache
+{{- if eq (.ImplFor "auth") "better-auth"}}
+  const auth = new BetterAuthService({ baseUrl: cfg.betterAuthUrl, secret: cfg.betterAuthSecret })
+{{- else if eq (.ImplFor "auth") "clerk"}}
   const auth = new ClerkAuthService({ secretKey: cfg.clerkSecretKey })
+{{- end}}
 {{- end}}
 {{- if .HasModule "payments"}}
 

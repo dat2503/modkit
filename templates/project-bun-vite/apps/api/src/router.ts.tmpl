@@ -3,28 +3,28 @@ import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { secureHeaders } from 'hono/secure-headers'
 {{- if .HasModule "auth"}}
-import type { IAuthService } from '../../../../contracts/ts/auth'
+import type { IAuthService } from '../contracts/ts/auth'
 {{- end}}
 {{- if .HasModule "payments"}}
-import type { IPaymentsService } from '../../../../contracts/ts/payments'
+import type { IPaymentsService } from '../contracts/ts/payments'
 {{- end}}
 {{- if .HasModule "email"}}
-import type { IEmailService } from '../../../../contracts/ts/email'
+import type { IEmailService } from '../contracts/ts/email'
 {{- end}}
 {{- if .HasModule "storage"}}
-import type { IStorageService } from '../../../../contracts/ts/storage'
+import type { IStorageService } from '../contracts/ts/storage'
 {{- end}}
 {{- if .HasModule "jobs"}}
-import type { IJobsService } from '../../../../contracts/ts/jobs'
+import type { IJobsService } from '../contracts/ts/jobs'
 {{- end}}
 {{- if .HasModule "realtime"}}
-import type { IRealtimeService } from '../../../../contracts/ts/realtime'
+import type { IRealtimeService } from '../contracts/ts/realtime'
 {{- end}}
 {{- if .HasModule "search"}}
-import type { ISearchService } from '../../../../contracts/ts/search'
+import type { ISearchService } from '../contracts/ts/search'
 {{- end}}
 {{- if .HasModule "feature-flags"}}
-import type { IFeatureFlagsService } from '../../../../contracts/ts/feature-flags'
+import type { IFeatureFlagsService } from '../contracts/ts/feature-flags'
 {{- end}}
 
 export interface Deps {
@@ -88,12 +88,18 @@ export function newRouter(deps: Deps): Hono {
   })
 {{- end}}
 {{- if .HasModule "auth"}}
+{{- if eq (.ImplFor "auth") "better-auth"}}
+
+  // Better Auth handles its own routes (/api/auth/*) — mount if needed
+  // app.route('/api/auth', authRoutes)
+{{- else if eq (.ImplFor "auth") "clerk"}}
 
   // Webhook from Clerk for user sync
   app.post('/webhooks/clerk', async (c) => {
     // TODO: verify Clerk webhook signature, sync user data
     return c.json({ received: true })
   })
+{{- end}}
 {{- end}}
 
   // TODO: add your routes here

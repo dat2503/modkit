@@ -94,7 +94,7 @@ modkit init \
   --modules auth,payments:stripe,email:resend \
   --no-prompt
 
-# Go backend + Next.js frontend with Clerk auth
+# Go backend + Next.js frontend with Clerk auth (non-default auth impl)
 modkit init \
   --name invoicely \
   --runtime go \
@@ -109,7 +109,7 @@ modkit init \
 ```
 ./{name}/
 ├── apps/
-│   ├── web/              ← Next.js frontend (shared across runtimes)
+│   ├── web/              ← Vite + React frontend (default) or Next.js
 │   └── api/              ← Go or Bun backend
 ├── contracts/            ← copied from registry for selected modules
 ├── modules/              ← selected module implementations
@@ -135,7 +135,7 @@ registry_sha: abc123def456  # pinned to registry commit
 
 modules:
   - name: auth
-    impl: clerk
+    impl: better-auth
     version: 1.0.0
   - name: payments
     impl: stripe
@@ -169,7 +169,7 @@ modkit list --phase mvp
 **Output (table):**
 ```
 NAME             CATEGORY       DEFAULT IMPL    RUNTIMES      PHASE   STATUS
-auth             auth           clerk           go, bun       mvp     stable
+auth             auth           better-auth     go, bun       mvp     stable
 payments         payments       stripe          go, bun       mvp     stable
 email            notification   resend          go, bun       mvp     stable
 realtime         realtime       websocket       go, bun       v2      stable
@@ -183,7 +183,7 @@ realtime         realtime       websocket       go, bun       v2      stable
       "name": "auth",
       "category": "auth",
       "phase": "mvp",
-      "default_impl": "clerk",
+      "default_impl": "better-auth",
       "runtimes": ["go", "bun"],
       "status": "stable",
       "always_include": false
@@ -388,7 +388,7 @@ modkit init \
   --name invoicely \
   --runtime go \
   --go-module github.com/myorg/invoicely \
-  --modules auth:clerk,payments:stripe,email:resend,storage:s3,cache:redis,jobs:asynq,observability:otel,error-tracking:sentry \
+  --modules auth,payments:stripe,email:resend,storage:s3,cache:redis,jobs:asynq,observability:otel,error-tracking:sentry \
   --no-prompt --output json
 ```
 

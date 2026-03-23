@@ -12,11 +12,18 @@
   },
   "dependencies": {
     "hono": "^4",
-    "@hono/node-server": "^1"{{- if .HasModule "auth"}},
-    "@clerk/backend": "^1"{{- end}}{{- if .HasModule "payments"}},
+    "@hono/node-server": "^1",
+    "postgres": "^3"{{- if .HasModule "auth"}},
+{{- if eq (.ImplFor "auth") "better-auth"}}
+    "better-auth": "^1"
+{{- else if eq (.ImplFor "auth") "clerk"}}
+    "@clerk/backend": "^1"
+{{- end}}
+{{- end}}{{- if .HasModule "payments"}},
     "stripe": "^15"{{- end}}{{- if .HasModule "email"}},
     "resend": "^3"{{- end}}{{- if .HasModule "cache"}},
-    "ioredis": "^5"{{- end}}{{- if .HasModule "observability"}},
+    "ioredis": "^5"{{- end}}{{- if .HasModule "storage"}},
+    "@aws-sdk/client-s3": "^3"{{- end}}{{- if .HasModule "observability"}},
     "@opentelemetry/sdk-node": "^0.52",
     "@opentelemetry/auto-instrumentations-node": "^0.46"{{- end}}{{- if .HasModule "error-tracking"}},
     "@sentry/bun": "^8"{{- end}}{{- if .HasModule "jobs"}},

@@ -39,8 +39,9 @@ type RegistryImpl struct {
 
 // ScaffoldModule is a resolved (name, impl) pair for scaffolding.
 type ScaffoldModule struct {
-	Name string
-	Impl string
+	Name    string
+	Impl    string
+	ImplDir string // relative path to impl directory within registry, e.g. "modules/auth/impl/better-auth-ts"
 }
 
 // loadRegistry reads and parses the registry YAML file.
@@ -88,6 +89,17 @@ func implSupportsRuntime(mod *RegistryModule, implName, runtime string) bool {
 	return false
 }
 
+// implDir returns the implementation directory path for a given impl + runtime.
+// Returns "" if not found.
+func implDir(mod *RegistryModule, implName, runtime string) string {
+	for _, impl := range mod.Implementations {
+		if impl.Name == implName {
+			return impl.Runtimes[runtime]
+		}
+	}
+	return ""
+}
+
 // resolveModules resolves the user-supplied module list against the registry,
 // auto-prepending always_include modules, and returning the ordered list.
 func resolveModules(reg *Registry, names []string, runtime string) ([]ScaffoldModule, error) {
@@ -122,7 +134,7 @@ func resolveModules(reg *Registry, names []string, runtime string) ([]ScaffoldMo
 			return nil, &runtimeMismatchError{module: name, impl: impl, runtime: runtime}
 		}
 
-		resolved = append(resolved, ScaffoldModule{Name: name, Impl: impl})
+		resolved = append(resolved, ScaffoldModule{Name: name, Impl: impl, ImplDir: implDir(mod, impl, runtime)})
 		seen[name] = true
 	}
 
@@ -134,7 +146,7 @@ func resolveModules(reg *Registry, names []string, runtime string) ([]ScaffoldMo
 			if impl == "" {
 				continue
 			}
-			prepend = append(prepend, ScaffoldModule{Name: mod.Name, Impl: impl})
+			prepend = append(prepend, ScaffoldModule{Name: mod.Name, Impl: impl, ImplDir: implDir(&mod, impl, runtime)})
 			seen[mod.Name] = true
 		}
 	}

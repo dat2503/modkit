@@ -13,7 +13,7 @@ apps/
     bootstrap/   ← Module initialization (init order matters)
     config/      ← Env-based config, loaded once at startup
     api/         ← HTTP router, middleware, handlers
-  web/           ← Next.js frontend (TypeScript, Tailwind)
+  web/           ← Vite + React frontend (TypeScript, Tailwind)
 infra/
   docker-compose.yaml  ← Local dev infrastructure
 Makefile         ← All common tasks
@@ -39,10 +39,14 @@ Makefile         ← All common tasks
 - Auth middleware reads Bearer token from `Authorization` header, puts user in context
 - Use `api.UserFromContext(r.Context())` to get the authenticated user in handlers
 
-### Frontend (Next.js)
+### Frontend (Vite + React)
 - API client is in `src/lib/api.ts` — use `api.get()`, `api.post()` etc.
+{{- if eq (.ImplFor "auth") "better-auth"}}
+- Auth is handled by Better Auth — use the authClient from `src/lib/auth.ts`
+{{- else if eq (.ImplFor "auth") "clerk"}}
 - Auth is handled by Clerk — use `useUser()` hook for client components
-- All pages use the App Router (`src/app/`)
+{{- end}}
+- All pages are in `src/pages/` with React Router
 
 ### Database
 - Migrations are in `apps/api/migrations/` (SQL files)

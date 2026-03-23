@@ -204,6 +204,7 @@ func stripeWebhookHandler(payments contracts.PaymentsService) http.HandlerFunc {
 {{- end}}
 
 {{- if .HasModule "auth"}}
+{{- if eq (.ImplFor "auth") "clerk"}}
 func clerkWebhookHandler(auth contracts.AuthService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// TODO: verify Svix signature and handle user lifecycle events
@@ -211,6 +212,7 @@ func clerkWebhookHandler(auth contracts.AuthService) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 	}
 }
+{{- end}}
 {{- end}}
 
 // ── Response helpers ──────────────────────────────────────────────────────────

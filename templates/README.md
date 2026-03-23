@@ -50,19 +50,25 @@ Each item in `{{.Modules}}` has:
 | Field | Type | Description |
 |-------|------|-------------|
 | `{{.Name}}` | `string` | Module name (e.g., `auth`) |
-| `{{.Impl}}` | `string` | Implementation (e.g., `clerk`) |
+| `{{.Impl}}` | `string` | Implementation (e.g., `better-auth`) |
+| `{{.ImplDir}}` | `string` | Registry-relative path to implementation directory |
 
 ## Helper Functions
 
 | Function | Description |
 |----------|-------------|
 | `{{.HasModule "name"}}` | Returns `true` if the named module is selected |
+| `{{.ImplFor "name"}}` | Returns the implementation name for a module (e.g., `"better-auth"`) |
 
 ### Example Usage
 
 ```go
 {{- if .HasModule "auth"}}
-import "github.com/clerkinc/clerk-sdk-go/clerk"
+{{- if eq (.ImplFor "auth") "better-auth"}}
+// Better Auth is the default
+{{- else if eq (.ImplFor "auth") "clerk"}}
+// Clerk is an alternative
+{{- end}}
 {{- end}}
 ```
 

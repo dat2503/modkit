@@ -151,12 +151,17 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("process templates: %w", err)
 	}
 
-	// 7. Copy module implementation files.
-	if err := copyModuleImpls(registryPath, initName, initRuntime, modules); err != nil {
+	// 7. Copy contracts into the generated project.
+	if err := copyContracts(registryPath, initName, initRuntime); err != nil {
+		return fmt.Errorf("copy contracts: %w", err)
+	}
+
+	// 8. Copy module implementation files.
+	if err := copyModuleImpls(registryPath, initName, modules); err != nil {
 		return fmt.Errorf("copy module impls: %w", err)
 	}
 
-	// 8. Post-processing (non-fatal).
+	// 9. Post-processing (non-fatal).
 	if initRuntime == "go" {
 		runPostStep("go mod tidy", filepath.Join(initName, "apps", "api"))
 	} else {
@@ -164,7 +169,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		runPostStep("bun install", filepath.Join(initName, "apps", "web"))
 	}
 
-	// 9. Output summary.
+	// 10. Output summary.
 	if outputFormat == "json" {
 		return printInitJSON(initName, initRuntime, initFrontend, modules)
 	}

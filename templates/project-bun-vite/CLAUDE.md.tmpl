@@ -14,7 +14,7 @@ apps/
       bootstrap.ts ← Module initialization (init order matters)
       config.ts  ← Env-based config, loaded once at startup
       router.ts  ← Hono router, middleware, routes
-  web/           ← Next.js frontend (TypeScript, Tailwind)
+  web/           ← Vite + React frontend (TypeScript, Tailwind)
 infra/
   docker-compose.yaml  ← Local dev infrastructure
 Makefile         ← All common tasks
@@ -39,10 +39,16 @@ Makefile         ← All common tasks
 - HTTP handlers return `{"data": ...}` on success, `{"error": "..."}` on failure
 - Auth middleware reads Bearer token from `Authorization` header
 
-### Frontend (Next.js)
+### Frontend (Vite + React)
 - API client is in `src/lib/api.ts` — use `api.get()`, `api.post()` etc.
+{{- if .HasModule "auth"}}
+{{- if eq (.ImplFor "auth") "better-auth"}}
+- Auth is handled by Better Auth — use the `authClient` from `src/lib/auth.ts`
+{{- else if eq (.ImplFor "auth") "clerk"}}
 - Auth is handled by Clerk — use `useUser()` hook for client components
-- All pages use the App Router (`src/app/`)
+{{- end}}
+{{- end}}
+- Routes are defined with react-router-dom in `src/routes.tsx`
 
 ### Development
 - `make setup` — install deps + start infra

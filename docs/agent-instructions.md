@@ -29,7 +29,7 @@ modkit registry repo (this repo)
 │       ├── module.yaml          ← metadata, dependencies, impls
 │       ├── config.schema.json   ← required env vars
 │       ├── docs/AGENT.md        ← how to wire this module
-│       └── impl/clerk-go/       ← concrete implementation
+│       └── impl/better-auth-go/ ← concrete implementation (default)
 ├── templates/          ← project scaffolds
 └── modkit/             ← CLI source code
         │

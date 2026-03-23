@@ -99,11 +99,10 @@ task-tracker/
 │   │   └── api/
 │   │       ├── router.go         ← HTTP routes + Deps struct
 │   │       └── middleware.go     ← auth, logging, tracing, recovery
-│   └── web/                      ← Next.js 14 frontend
+│   └── web/                      ← Vite + React frontend (default)
 │       ├── src/
-│       │   ├── app/
-│       │   │   ├── layout.tsx    ← ClerkProvider (auth) wraps everything
-│       │   │   └── page.tsx      ← placeholder home page
+│       │   ├── routes.tsx        ← react-router-dom route definitions
+│       │   ├── App.tsx           ← root component
 │       │   └── lib/
 │       │       └── api.ts        ← typed fetch wrapper: api.get(), api.post(), etc.
 │       └── package.json
@@ -129,9 +128,9 @@ This order is enforced — swap it and things will break at runtime.
 
 **`.env.example`** has one section per selected module:
 ```
-# ── Auth (Clerk) ──────
-CLERK_SECRET_KEY=sk_test_changeme
-...
+# ── Auth (Better Auth) ──────
+BETTER_AUTH_SECRET=changeme-generate-a-random-secret
+BETTER_AUTH_URL=http://localhost:8080
 
 # ── Cache (Redis) ─────
 REDIS_URL=redis://localhost:6379
@@ -153,9 +152,9 @@ cp .env.example .env
 ```
 
 Open `.env` and fill in the required keys:
-- `CLERK_SECRET_KEY` and `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` — from [clerk.com](https://clerk.com) (free tier)
+- `BETTER_AUTH_SECRET` — generate a random string (e.g. `openssl rand -hex 32`)
 - `RESEND_API_KEY` — from [resend.com](https://resend.com) (free tier)
-- Leave `DATABASE_URL` and `REDIS_URL` as-is (Docker will provide them)
+- Leave `DATABASE_URL`, `REDIS_URL`, and `BETTER_AUTH_URL` as-is (Docker provides infra, auth runs locally)
 
 **Step 2: Start infrastructure and install dependencies**
 
@@ -203,7 +202,7 @@ mux.HandleFunc("GET /api/tasks", authRequired(deps.Auth, http.HandlerFunc(func(w
 **2. Test it:**
 
 ```bash
-# Get an auth token from Clerk, then:
+# Get a session token from Better Auth, then:
 curl -H "Authorization: Bearer <token>" http://localhost:8080/api/tasks
 # → {"data":[{"id":"1","title":"First task","owner":"..."}]}
 ```
@@ -214,12 +213,11 @@ All successful responses are wrapped in `{"data": ...}`. All error responses use
 
 ## Add a Frontend Page
 
-**1. Create `apps/web/src/app/tasks/page.tsx`:**
+**1. Create `apps/web/src/pages/TasksPage.tsx`:**
 
 ```tsx
-'use client'
 import { useEffect, useState } from 'react'
-import { api } from '@/lib/api'
+import { api } from '../lib/api'
 
 type Task = { id: string; title: string; owner: string }
 
@@ -243,9 +241,9 @@ export default function TasksPage() {
 }
 ```
 
-**2. Navigate to `http://localhost:3000/tasks`.**
+**2. Add a route in `apps/web/src/routes.tsx` and navigate to `http://localhost:3000/tasks`.**
 
-The `api` client automatically uses `NEXT_PUBLIC_API_URL` (set to `http://localhost:8080` by default). For authenticated requests, pass the Clerk session token in headers.
+The `api` client uses `VITE_API_URL` (set to `http://localhost:8080` by default). For authenticated requests, use the Better Auth session token.
 
 ---
 

@@ -40,12 +40,30 @@ type Config struct {
 
 // Load reads configuration from environment variables and validates required fields.
 // Returns an error listing all missing required variables.
+// In development mode, third-party service keys are optional — the app boots
+// with warnings instead of crashing.
 func Load() (*Config, error) {
+	appEnv := envOrDefault("APP_ENV", "development")
+	isDev := appEnv == "development"
 	var missing []string
+	var warned []string
 
 	get := func(key string, required bool) string {
 		v := os.Getenv(key)
 		if v == "" && required {
+			missing = append(missing, key)
+		}
+		return v
+	}
+
+	// getService treats the key as optional in dev mode (warns instead of failing).
+	getService := func(key string) string {
+		v := os.Getenv(key)
+		if v == "" && isDev {
+			warned = append(warned, key)
+			return ""
+		}
+		if v == "" {
 			missing = append(missing, key)
 		}
 		return v
@@ -64,7 +82,7 @@ func Load() (*Config, error) {
 		AllowedOrigins: envOrDefault("ALLOWED_ORIGINS", "*"),
 		{{- if .HasModule "observability"}}
 		Observability: ObservabilityConfig{
-			ServiceName: get("OTEL_SERVICE_NAME", true),
+			ServiceName: envOrDefault("OTEL_SERVICE_NAME", "{{.Name}}"),
 			Endpoint:    get("OTEL_EXPORTER_OTLP_ENDPOINT", false),
 			LogLevel:    envOrDefault("LOG_LEVEL", "info"),
 			LogFormat:   envOrDefault("LOG_FORMAT", "json"),
@@ -72,7 +90,7 @@ func Load() (*Config, error) {
 		{{- end}}
 		{{- if .HasModule "error-tracking"}}
 		ErrorTracking: ErrorTrackingConfig{
-			SentryDSN:        get("SENTRY_DSN", true),
+			SentryDSN:        getService("SENTRY_DSN"),
 			Environment:      envOrDefault("SENTRY_ENVIRONMENT", "development"),
 			TracesSampleRate: parseFloat(os.Getenv("SENTRY_TRACES_SAMPLE_RATE"), 1.0),
 		},
@@ -84,30 +102,37 @@ func Load() (*Config, error) {
 		},
 		{{- end}}
 		{{- if .HasModule "auth"}}
+		{{- if eq (.ImplFor "auth") "better-auth"}}
 		Auth: AuthConfig{
-			SecretKey:      get("CLERK_SECRET_KEY", true),
-			PublishableKey: get("CLERK_PUBLISHABLE_KEY", true),
+			Secret:  getService("BETTER_AUTH_SECRET"),
+			BaseURL: envOrDefault("BETTER_AUTH_URL", "http://localhost:8080"),
+		},
+		{{- else if eq (.ImplFor "auth") "clerk"}}
+		Auth: AuthConfig{
+			SecretKey:      getService("CLERK_SECRET_KEY"),
+			PublishableKey: getService("CLERK_PUBLISHABLE_KEY"),
 			WebhookSecret:  get("CLERK_WEBHOOK_SECRET", false),
 		},
 		{{- end}}
+		{{- end}}
 		{{- if .HasModule "payments"}}
 		Payments: PaymentsConfig{
-			SecretKey:     get("STRIPE_SECRET_KEY", true),
-			WebhookSecret: get("STRIPE_WEBHOOK_SECRET", true),
+			SecretKey:     getService("STRIPE_SECRET_KEY"),
+			WebhookSecret: getService("STRIPE_WEBHOOK_SECRET"),
 		},
 		{{- end}}
 		{{- if .HasModule "email"}}
 		Email: EmailConfig{
-			APIKey:      get("EMAIL_API_KEY", true),
-			FromDefault: get("EMAIL_FROM_DEFAULT", true),
+			APIKey:      getService("EMAIL_API_KEY"),
+			FromDefault: envOrDefault("EMAIL_FROM_DEFAULT", "noreply@localhost"),
 		},
 		{{- end}}
 		{{- if .HasModule "storage"}}
 		Storage: StorageConfig{
-			Bucket:          get("STORAGE_BUCKET", true),
-			Region:          get("STORAGE_REGION", true),
-			AccessKeyID:     get("STORAGE_ACCESS_KEY_ID", true),
-			SecretAccessKey: get("STORAGE_SECRET_ACCESS_KEY", true),
+			Bucket:          getService("STORAGE_BUCKET"),
+			Region:          getService("STORAGE_REGION"),
+			AccessKeyID:     getService("STORAGE_ACCESS_KEY_ID"),
+			SecretAccessKey: getService("STORAGE_SECRET_ACCESS_KEY"),
 			Endpoint:        get("STORAGE_ENDPOINT", false),
 			PublicBaseURL:   get("STORAGE_PUBLIC_BASE_URL", false),
 		},
@@ -119,6 +144,10 @@ func Load() (*Config, error) {
 			DefaultQueue: envOrDefault("JOBS_DEFAULT_QUEUE", "default"),
 		},
 		{{- end}}
+	}
+
+	if len(warned) > 0 {
+		fmt.Fprintf(os.Stderr, "[config] DEV MODE: missing service keys (modules will be non-functional): %v\n", warned)
 	}
 
 	if len(missing) > 0 {
@@ -155,11 +184,18 @@ type CacheConfig struct {
 {{- end}}
 
 {{- if .HasModule "auth"}}
+{{- if eq (.ImplFor "auth") "better-auth"}}
+type AuthConfig struct {
+	Secret  string
+	BaseURL string
+}
+{{- else if eq (.ImplFor "auth") "clerk"}}
 type AuthConfig struct {
 	SecretKey      string
 	PublishableKey string
 	WebhookSecret  string
 }
+{{- end}}
 {{- end}}
 
 {{- if .HasModule "payments"}}

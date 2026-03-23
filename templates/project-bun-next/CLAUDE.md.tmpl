@@ -41,7 +41,13 @@ Makefile         ← All common tasks
 
 ### Frontend (Next.js)
 - API client is in `src/lib/api.ts` — use `api.get()`, `api.post()` etc.
+{{- if .HasModule "auth"}}
+{{- if eq (.ImplFor "auth") "better-auth"}}
+- Auth is handled by Better Auth — use the `authClient` from `src/lib/auth.ts`
+{{- else if eq (.ImplFor "auth") "clerk"}}
 - Auth is handled by Clerk — use `useUser()` hook for client components
+{{- end}}
+{{- end}}
 - All pages use the App Router (`src/app/`)
 
 ### Development
