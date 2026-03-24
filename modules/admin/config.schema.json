@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "ADMIN_DEFAULT_EMAIL": {
+      "type": "string",
+      "description": "Default admin account email used by the seed script",
+      "default": "admin@localhost"
+    },
+    "ADMIN_DEFAULT_PASSWORD": {
+      "type": "string",
+      "description": "Default admin account password used by the seed script",
+      "default": "changeme"
+    }
+  }
+}

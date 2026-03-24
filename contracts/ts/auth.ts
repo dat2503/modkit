@@ -26,6 +26,12 @@ export interface IAuthService {
    * Call this when a user requests account deletion.
    */
   deleteUser(userId: string): Promise<void>;
+
+  /**
+   * Updates a user's role (e.g. "admin", "user").
+   * Used by the admin module for role-based access control.
+   */
+  updateUserRole(userId: string, role: string): Promise<void>;
 }
 
 /** Represents an authenticated user returned from the auth provider. */
@@ -41,6 +47,9 @@ export interface AuthUser {
 
   /** URL of the user's profile picture. May be undefined. */
   avatarUrl?: string;
+
+  /** The user's role (e.g. "admin", "user"). May be undefined for users without an assigned role. */
+  role?: string;
 
   /** Arbitrary key-value pairs set on the user in the auth provider. */
   metadata?: Record<string, string>;

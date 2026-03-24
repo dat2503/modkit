@@ -38,6 +38,9 @@ import { ElasticsearchSearchService } from '../modules/search/elasticsearch'
 {{- if .HasModule "feature-flags"}}
 import { FlagsmithFeatureFlagsService } from '../modules/feature-flags/flagsmith'
 {{- end}}
+{{- if .HasModule "admin"}}
+import { AdminService } from '../modules/admin/admin'
+{{- end}}
 
 export async function bootstrap(): Promise<{ app: Hono; shutdown: () => Promise<void> }> {
   const cfg = loadConfig()
@@ -107,6 +110,10 @@ export async function bootstrap(): Promise<{ app: Hono; shutdown: () => Promise<
 
   const featureFlags = new FlagsmithFeatureFlagsService({ serverApiKey: cfg.flagsmithServerApiKey })
 {{- end}}
+{{- if .HasModule "admin"}}
+
+  const admin = new AdminService(auth)
+{{- end}}
 
   const app = newRouter({
     allowedOrigins: cfg.allowedOrigins,
@@ -133,6 +140,9 @@ export async function bootstrap(): Promise<{ app: Hono; shutdown: () => Promise<
 {{- end}}
 {{- if .HasModule "feature-flags"}}
     featureFlags,
+{{- end}}
+{{- if .HasModule "admin"}}
+    admin,
 {{- end}}
   })
 

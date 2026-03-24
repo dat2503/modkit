@@ -1,0 +1,19 @@
+name: admin
+description: Admin dashboard with user management, role-based access control, and seed script
+phase: mvp
+category: management
+depends_on:
+  - auth
+default_impl: default
+implementations:
+  - name: default
+    runtimes:
+      ts: impl/default-ts
+      go: impl/default-go
+config:
+  - key: ADMIN_DEFAULT_EMAIL
+    description: Default admin account email (used by seed script)
+    default: admin@localhost
+  - key: ADMIN_DEFAULT_PASSWORD
+    description: Default admin account password (used by seed script)
+    default: changeme

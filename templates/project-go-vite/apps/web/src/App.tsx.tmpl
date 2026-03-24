@@ -1,26 +1,50 @@
 import { Routes, Route } from 'react-router-dom'
+import AppLayout from './components/AppLayout'
 import Home from './pages/Home'
 import Dashboard from './pages/Dashboard'{{- if .HasModule "auth"}}
 import ProtectedRoute from './components/ProtectedRoute'
-import SignIn from './pages/SignIn'{{- end}}
+import SignIn from './pages/SignIn'
+import SignUp from './pages/SignUp'
+import ForgotPassword from './pages/ForgotPassword'{{- end}}{{- if .HasModule "admin"}}
+import AdminRoute from './components/AdminRoute'
+import AdminLayout from './pages/admin/AdminLayout'
+import AdminDashboard from './pages/admin/Dashboard'
+import AdminUsers from './pages/admin/Users'{{- end}}
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      <Route element={<AppLayout />}>
+        <Route path="/" element={<Home />} />
 {{- if .HasModule "auth"}}
-      <Route path="/sign-in" element={<SignIn />} />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
+        <Route path="/sign-in" element={<SignIn />} />
+        <Route path="/sign-up" element={<SignUp />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
 {{- else}}
-      <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} />
 {{- end}}
+{{- if .HasModule "admin"}}
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminLayout />
+            </AdminRoute>
+          }
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<AdminUsers />} />
+        </Route>
+{{- end}}
+      </Route>
     </Routes>
   )
 }

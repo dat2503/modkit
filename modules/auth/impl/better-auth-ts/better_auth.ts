@@ -32,7 +32,7 @@ export class BetterAuthService implements IAuthService {
       throw new Error(`better-auth: get-session returned ${res.status}`)
     }
 
-    const data = await res.json() as { user?: { id: string; email: string; name: string; image?: string } }
+    const data = await res.json() as { user?: { id: string; email: string; name: string; image?: string; role?: string } }
     if (!data.user?.id) {
       throw new Error('better-auth: session has no user')
     }
@@ -42,6 +42,7 @@ export class BetterAuthService implements IAuthService {
       email: data.user.email,
       name: data.user.name,
       avatarUrl: data.user.image ?? '',
+      role: data.user.role ?? 'user',
       metadata: {},
     }
   }
@@ -83,6 +84,21 @@ export class BetterAuthService implements IAuthService {
     }
   }
 
+  async updateUserRole(userId: string, role: string): Promise<void> {
+    const res = await fetch(`${this.config.baseUrl}/api/auth/admin/set-role`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-better-auth-secret': this.config.secret,
+      },
+      body: JSON.stringify({ userId, role }),
+    })
+
+    if (!res.ok) {
+      throw new Error(`better-auth: set role returned ${res.status}`)
+    }
+  }
+
   async deleteUser(userId: string): Promise<void> {
     const res = await fetch(`${this.config.baseUrl}/api/auth/admin/remove-user`, {
       method: 'DELETE',
@@ -104,6 +120,7 @@ interface BAUser {
   email: string
   name: string
   image?: string
+  role?: string
 }
 
 function baUserToContract(u: BAUser): AuthUser {
@@ -112,6 +129,7 @@ function baUserToContract(u: BAUser): AuthUser {
     email: u.email,
     name: u.name,
     avatarUrl: u.image ?? '',
+    role: u.role ?? 'user',
     metadata: {},
   }
 }

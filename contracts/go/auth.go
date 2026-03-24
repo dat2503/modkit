@@ -22,6 +22,10 @@ type AuthService interface {
 	// DeleteUser removes a user from the auth provider.
 	// This is typically called when a user requests account deletion.
 	DeleteUser(ctx context.Context, userID string) error
+
+	// UpdateUserRole updates a user's role (e.g. "admin", "user").
+	// Used by the admin module for role-based access control.
+	UpdateUserRole(ctx context.Context, userID string, role string) error
 }
 
 // AuthUser represents an authenticated user returned from the auth provider.
@@ -37,6 +41,9 @@ type AuthUser struct {
 
 	// AvatarURL is the URL of the user's profile picture. May be empty.
 	AvatarURL string
+
+	// Role is the user's role (e.g. "admin", "user"). May be empty for users without an assigned role.
+	Role string
 
 	// Metadata holds arbitrary key-value pairs set on the user in the auth provider.
 	Metadata map[string]string

@@ -37,4 +37,9 @@ export class ClerkAuthService implements IAuthService {
     // TODO: implement using @clerk/backend clerkClient.users.deleteUser(userId)
     throw new Error('not implemented')
   }
+
+  async updateUserRole(userId: string, role: string): Promise<void> {
+    // TODO: implement using @clerk/backend clerkClient.users.updateUserMetadata(userId, { publicMetadata: { role } })
+    throw new Error('not implemented')
+  }
 }

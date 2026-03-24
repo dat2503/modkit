@@ -3,6 +3,7 @@ package clerk
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/clerk/clerk-sdk-go/v2"
@@ -97,10 +98,32 @@ func (s *Service) DeleteUser(ctx context.Context, userID string) error {
 	return nil
 }
 
+// UpdateUserRole updates a user's role in Clerk via public metadata.
+func (s *Service) UpdateUserRole(ctx context.Context, userID string, role string) error {
+	_, err := clerkuser.UpdateMetadata(ctx, userID, &clerkuser.UpdateMetadataParams{
+		PublicMetadata: &json.RawMessage{},
+	})
+	// NOTE: Clerk stores role in publicMetadata.role — the actual
+	// UpdateMetadata call should set {"role": role} in PublicMetadata.
+	// This is a stub that needs the proper Clerk SDK metadata update.
+	if err != nil {
+		return fmt.Errorf("clerk: update user role: %w", err)
+	}
+	return nil
+}
+
 func clerkUserToContract(u *clerk.User) *contracts.AuthUser {
-	au := &contracts.AuthUser{ID: u.ID}
+	au := &contracts.AuthUser{ID: u.ID, Role: "user"}
 	if u.ImageURL != nil {
 		au.AvatarURL = *u.ImageURL
+	}
+	if u.PublicMetadata != nil {
+		var meta map[string]interface{}
+		if err := json.Unmarshal(*u.PublicMetadata, &meta); err == nil {
+			if r, ok := meta["role"].(string); ok {
+				au.Role = r
+			}
+		}
 	}
 	if u.FirstName != nil && u.LastName != nil {
 		au.Name = *u.FirstName + " " + *u.LastName

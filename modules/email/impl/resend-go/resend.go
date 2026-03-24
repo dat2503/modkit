@@ -3,6 +3,7 @@ package resend
 
 import (
 	"context"
+	"fmt"
 
 	contracts "github.com/dat2503/modkit/contracts/go"
 )
@@ -23,8 +24,14 @@ type Service struct {
 }
 
 // New creates a new Resend email service.
-func New(cfg Config) *Service {
-	return &Service{cfg: cfg}
+func New(cfg Config) (*Service, error) {
+	if cfg.APIKey == "" {
+		return nil, fmt.Errorf("resend: APIKey is required")
+	}
+	if cfg.FromDefault == "" {
+		return nil, fmt.Errorf("resend: FromDefault is required")
+	}
+	return &Service{cfg: cfg}, nil
 }
 
 // Send sends a single transactional email via Resend.

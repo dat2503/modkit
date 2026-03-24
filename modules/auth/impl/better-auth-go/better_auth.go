@@ -77,6 +77,7 @@ func (s *Service) ValidateToken(ctx context.Context, token string) (*contracts.A
 			Email string `json:"email"`
 			Name  string `json:"name"`
 			Image string `json:"image"`
+			Role  string `json:"role"`
 		} `json:"user"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -86,11 +87,16 @@ func (s *Service) ValidateToken(ctx context.Context, token string) (*contracts.A
 		return nil, fmt.Errorf("better-auth: session has no user")
 	}
 
+	role := result.User.Role
+	if role == "" {
+		role = "user"
+	}
 	return &contracts.AuthUser{
 		ID:        result.User.ID,
 		Email:     result.User.Email,
 		Name:      result.User.Name,
 		AvatarURL: result.User.Image,
+		Role:      role,
 	}, nil
 }
 
@@ -167,6 +173,28 @@ func (s *Service) ListUsers(ctx context.Context, opts contracts.ListUsersOptions
 	return &contracts.UserList{Users: users, Total: result.Total}, nil
 }
 
+// UpdateUserRole updates a user's role using the Better Auth admin API.
+func (s *Service) UpdateUserRole(ctx context.Context, userID string, role string) error {
+	body, _ := json.Marshal(map[string]string{"userId": userID, "role": role})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.BaseURL+"/api/auth/admin/set-role", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("better-auth: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-better-auth-secret", s.cfg.Secret)
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("better-auth: set role: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("better-auth: set role returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // DeleteUser removes a user using the Better Auth admin API.
 func (s *Service) DeleteUser(ctx context.Context, userID string) error {
 	body, _ := json.Marshal(map[string]string{"userId": userID})
@@ -194,13 +222,19 @@ type baUser struct {
 	Email string `json:"email"`
 	Name  string `json:"name"`
 	Image string `json:"image"`
+	Role  string `json:"role"`
 }
 
 func baUserToContract(u baUser) *contracts.AuthUser {
+	role := u.Role
+	if role == "" {
+		role = "user"
+	}
 	return &contracts.AuthUser{
 		ID:        u.ID,
 		Email:     u.Email,
 		Name:      u.Name,
 		AvatarURL: u.Image,
+		Role:      role,
 	}
 }

@@ -310,6 +310,35 @@ modules:
           bun: modules/jobs/impl/bullmq-ts
         notes: "Default for Bun runtime. Redis-backed, feature-rich."
 
+  - name: admin
+    category: management
+    phase: mvp
+    always_include: false
+    description: >
+      Admin dashboard with user management, role-based access control, and seed script.
+      Provides admin middleware, user listing/role editing, and dashboard stats.
+      Depends on auth — wraps the auth service for admin operations.
+    interface_go: contracts/go/admin.go
+    interface_ts: contracts/ts/admin.ts
+    config_schema: modules/admin/config.schema.json
+    agent_docs: modules/admin/docs/AGENT.md
+    default_impl: default
+    status: stable
+    dependencies:
+      required: [auth]
+      optional: [observability]
+    include_when:
+      - "app needs an admin panel"
+      - "user management required"
+      - "role-based access control needed"
+    implementations:
+      - name: default
+        label: "Default (wraps auth)"
+        runtimes:
+          go: modules/admin/impl/default-go
+          bun: modules/admin/impl/default-ts
+        notes: "Default. Wraps auth service for admin operations."
+
   # ── V2 MODULES ──────────────────────────
 
   - name: realtime
@@ -447,6 +476,11 @@ composition_rules:
   - id: init-order-cache-before-jobs
     phase: mvp
     rule: "cache must be initialized before jobs (jobs requires cache as queue backend)"
+    severity: error
+
+  - id: init-order-auth-before-admin
+    phase: mvp
+    rule: "auth must be initialized before admin (admin wraps auth for role-based operations)"
     severity: error
 
   - id: init-order-auth-before-realtime

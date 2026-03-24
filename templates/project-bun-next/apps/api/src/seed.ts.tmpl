@@ -1,0 +1,71 @@
+{{- if .HasModule "admin"}}
+/**
+ * Seed script — creates the default admin account.
+ *
+ * Usage:
+ *   bun run seed
+ *
+ * Make sure your .env is loaded and the Better Auth server is running.
+ */
+import '../../../apps/api/node_modules/dotenv/config' // load .env if present
+
+const email = process.env.ADMIN_DEFAULT_EMAIL ?? 'admin@localhost'
+const password = process.env.ADMIN_DEFAULT_PASSWORD ?? 'changeme'
+const authUrl = process.env.BETTER_AUTH_URL ?? 'http://localhost:8080'
+const secret = process.env.BETTER_AUTH_SECRET ?? ''
+
+async function seed() {
+  console.log(`Creating admin account: ${email}`)
+
+  const signupRes = await fetch(`${authUrl}/api/auth/sign-up/email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Admin', email, password }),
+  })
+
+  if (!signupRes.ok && signupRes.status !== 409) {
+    const body = await signupRes.text()
+    console.error(`Failed to create admin: ${signupRes.status} ${body}`)
+    process.exit(1)
+  }
+
+  if (signupRes.status === 409) {
+    console.log('Account already exists, updating role...')
+  }
+
+  const listRes = await fetch(
+    `${authUrl}/api/auth/admin/list-users?searchField=email&searchValue=${encodeURIComponent(email)}&limit=1`,
+    { headers: { 'x-better-auth-secret': secret } },
+  )
+  const listData = (await listRes.json()) as { users: Array<{ id: string }> }
+  const userId = listData.users?.[0]?.id
+  if (!userId) {
+    console.error('Could not find admin user after signup')
+    process.exit(1)
+  }
+
+  const roleRes = await fetch(`${authUrl}/api/auth/admin/set-role`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-better-auth-secret': secret,
+    },
+    body: JSON.stringify({ userId, role: 'admin' }),
+  })
+
+  if (!roleRes.ok) {
+    console.error(`Failed to set admin role: ${roleRes.status}`)
+    process.exit(1)
+  }
+
+  console.log(`Done! Admin account: ${email} / ${password}`)
+  console.log('Sign in at http://localhost:3000/sign-in')
+}
+
+seed().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})
+{{- else}}
+console.log('Admin module not enabled. Nothing to seed.')
+{{- end}}

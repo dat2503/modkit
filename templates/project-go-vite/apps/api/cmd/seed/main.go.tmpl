@@ -1,0 +1,27 @@
+{{- if .HasModule "admin"}}
+// Seed creates the default admin account.
+// Usage: go run cmd/seed/main.go
+package main
+
+import (
+	"fmt"
+	"os"
+
+	adminpkg "{{.GoModule}}/modules/admin"
+)
+
+func main() {
+	if err := adminpkg.Seed(); err != nil {
+		fmt.Fprintf(os.Stderr, "seed: %v\n", err)
+		os.Exit(1)
+	}
+}
+{{- else}}
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Admin module not enabled. Nothing to seed.")
+}
+{{- end}}

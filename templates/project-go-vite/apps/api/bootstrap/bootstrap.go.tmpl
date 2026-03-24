@@ -38,6 +38,9 @@ import (
 	{{- if .HasModule "jobs"}}
 	jobspkg "{{.GoModule}}/modules/jobs"
 	{{- end}}
+	{{- if .HasModule "admin"}}
+	adminpkg "{{.GoModule}}/modules/admin"
+	{{- end}}
 
 	"{{.GoModule}}/config"
 	"{{.GoModule}}/api"
@@ -156,7 +159,11 @@ func Init(ctx context.Context) (http.Handler, func(context.Context), error) {
 		return nil, nil, fmt.Errorf("init jobs: %w", err)
 	}
 	go jobsSvc.Start(ctx)
-	shutdowns = append(shutdowns, jobsSvc.Stop)
+	shutdowns = append(shutdowns, func(ctx context.Context) { _ = jobsSvc.Stop(ctx) })
+	{{- end}}
+
+	{{- if .HasModule "admin"}}
+	adminSvc := adminpkg.New(authSvc)
 	{{- end}}
 
 	// ── Wire HTTP handler ────────────────────────────────────────────────────
@@ -171,6 +178,7 @@ func Init(ctx context.Context) (http.Handler, func(context.Context), error) {
 		{{- if .HasModule "email"}}Email:    emailSvc,{{- end}}
 		{{- if .HasModule "storage"}}Storage:  storageSvc,{{- end}}
 		{{- if .HasModule "jobs"}}Jobs:     jobsSvc,{{- end}}
+		{{- if .HasModule "admin"}}Admin:    adminSvc,{{- end}}
 	})
 
 	shutdown := func(ctx context.Context) {
