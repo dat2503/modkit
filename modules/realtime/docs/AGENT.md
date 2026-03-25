@@ -103,6 +103,23 @@ REALTIME_MAX_CONNECTIONS_PER_USER=5
 REALTIME_PING_INTERVAL_SECONDS=30
 ```
 
+## Integration spec
+
+After wiring, verify with:
+
+1. Start the app with auth and cache modules running
+2. Sign in and obtain a session token
+3. Connect via WebSocket: `websocat ws://localhost:8080/ws?token=<session_token>`
+4. In a separate terminal, publish a test event from a handler or script:
+   ```go
+   realtime.PublishToUser(ctx, userID, contracts.RealtimeEvent{
+       Type:    "test:ping",
+       Payload: map[string]any{"msg": "hello"},
+   })
+   ```
+5. The WebSocket client should receive `{"type":"test:ping","payload":{"msg":"hello"}}`
+6. Disconnect the client — verify no errors in server logs
+
 ## Do NOT
 
 - Allow unauthenticated WebSocket connections — always validate token first

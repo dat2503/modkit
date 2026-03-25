@@ -12,7 +12,7 @@ Initialize it **second**, immediately after observability.
 1. Import `ErrorTrackingService` from `contracts/go/errors.go`
 2. Initialize in bootstrap **immediately after observability**:
    ```go
-   errSvc := sentry.New(sentry.Config{
+   errSvc, err := sentry.New(sentry.Config{
        DSN:               cfg.ErrorTracking.SentryDSN,
        Environment:       cfg.ErrorTracking.Environment,
        TracesSampleRate:  cfg.ErrorTracking.TracesSampleRate,
@@ -87,6 +87,16 @@ SENTRY_DSN=https://...@sentry.io/...   # sensitive
 SENTRY_ENVIRONMENT=production
 SENTRY_TRACES_SAMPLE_RATE=0.1
 ```
+
+## Integration spec
+
+After wiring, verify with:
+
+1. Set `SENTRY_DSN` to your project's DSN and `SENTRY_ENVIRONMENT=development`
+2. Add a temporary test route that panics: `app.get('/api/v1/test-error', () => { throw new Error('test sentry') })`
+3. Hit `GET /api/v1/test-error` — the recovery middleware should return 500 and capture the error
+4. Open the Sentry dashboard — the `test sentry` error should appear within 30 seconds
+5. Remove the test route after verifying
 
 ## Do NOT
 

@@ -119,7 +119,7 @@ func clerkUserToContract(u *clerk.User) *contracts.AuthUser {
 	}
 	if u.PublicMetadata != nil {
 		var meta map[string]interface{}
-		if err := json.Unmarshal(*u.PublicMetadata, &meta); err == nil {
+		if err := json.Unmarshal(u.PublicMetadata, &meta); err == nil {
 			if r, ok := meta["role"].(string); ok {
 				au.Role = r
 			}

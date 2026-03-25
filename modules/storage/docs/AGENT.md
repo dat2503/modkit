@@ -18,7 +18,7 @@ Do NOT use for:
 1. Import `StorageService` from `contracts/go/storage.go`
 2. Initialize in bootstrap:
    ```go
-   storageSvc := s3.New(s3.Config{
+   storageSvc, err := s3.New(s3.Config{
        Bucket:          cfg.Storage.Bucket,
        Region:          cfg.Storage.Region,
        AccessKeyID:     cfg.Storage.AccessKeyID,
@@ -96,6 +96,23 @@ STORAGE_SECRET_ACCESS_KEY=...        # sensitive
 STORAGE_ENDPOINT=                    # empty for AWS, set for R2/MinIO
 STORAGE_PUBLIC_BASE_URL=https://assets.yourapp.com  # optional
 ```
+
+## Integration spec
+
+After wiring, verify with:
+
+1. Set S3/R2 credentials in `.env` and create the target bucket
+2. Add a temporary test route that uploads a small file:
+   ```go
+   result, err := storage.Upload(ctx, "test/hello.txt", strings.NewReader("hello"), contracts.UploadOptions{
+       ContentType: "text/plain",
+   })
+   // result.Key should equal "test/hello.txt"
+   ```
+3. Generate a signed URL: `url, _ := storage.SignedURL(ctx, "test/hello.txt", 5*time.Minute)`
+4. Open the signed URL in a browser — should download "hello"
+5. Check existence: `storage.Exists(ctx, "test/hello.txt")` should return `true`
+6. Clean up: `storage.Delete(ctx, "test/hello.txt")`
 
 ## Do NOT
 

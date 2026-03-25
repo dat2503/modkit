@@ -3,6 +3,7 @@ package elasticsearch
 
 import (
 	"context"
+	"fmt"
 
 	contracts "github.com/dat2503/modkit/contracts/go"
 )
@@ -26,8 +27,11 @@ type Service struct {
 }
 
 // New creates a new Elasticsearch search service.
-func New(cfg Config) *Service {
-	return &Service{cfg: cfg}
+func New(cfg Config) (*Service, error) {
+	if cfg.URL == "" {
+		return nil, fmt.Errorf("elasticsearch: URL is required")
+	}
+	return &Service{cfg: cfg}, nil
 }
 
 func (s *Service) Index(ctx context.Context, indexName string, id string, doc any) error {

@@ -96,7 +96,7 @@ export async function bootstrap(): Promise<{ app: Hono; shutdown: () => Promise<
 {{- if .HasModule "jobs"}}
 
   const jobs = new BullMQJobsService({ redisUrl: cfg.redisUrl })
-  shutdowns.push(() => jobs.stop())
+  shutdowns.push(async () => { await jobs.stop().catch(console.error) })
 {{- end}}
 {{- if .HasModule "realtime"}}
 

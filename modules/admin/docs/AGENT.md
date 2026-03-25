@@ -42,6 +42,16 @@ Run the seed script to create the default admin account:
 
 The seed script uses `ADMIN_DEFAULT_EMAIL` and `ADMIN_DEFAULT_PASSWORD` env vars.
 
+## Integration spec
+
+After wiring, verify with:
+
+1. Set `ADMIN_DEFAULT_EMAIL=admin@localhost` and `ADMIN_DEFAULT_PASSWORD=changeme` in `.env`
+2. Run the seed script: `bun run seed` (Bun) or `go run cmd/seed/main.go` (Go)
+3. Sign in as admin via `POST /api/auth/sign-in/email` with the seed credentials — should succeed
+4. Hit an admin-only route (e.g. `GET /api/v1/admin/users`) with the admin session token — should return 200
+5. Sign in as a regular user and hit the same admin route — should return 403 Forbidden
+
 ## Do-nots
 - Do NOT hardcode admin emails — use the seed script and role field
 - Do NOT bypass auth middleware for admin routes — always validate the session first, then check the role

@@ -64,7 +64,7 @@ Always pair with the jobs module for emails that don't need to block the respons
 
 ```go
 // In your handler:
-err := jobs.Enqueue(ctx, "email:send_welcome", WelcomeEmailPayload{UserID: user.ID})
+_, err := jobs.Enqueue(ctx, "email:send_welcome", WelcomeEmailPayload{UserID: user.ID})
 
 // In your job handler:
 func handleSendWelcomeEmail(ctx context.Context, payload []byte) error {
@@ -94,6 +94,23 @@ EMAIL_PROVIDER=resend
 EMAIL_API_KEY=re_...                # sensitive
 EMAIL_FROM_DEFAULT=noreply@yourapp.com
 ```
+
+## Integration spec
+
+After wiring, verify with:
+
+1. Set `EMAIL_API_KEY` to a Resend test key (`re_test_...`) and `EMAIL_FROM_DEFAULT` to a verified domain address
+2. Add a temporary test route that sends an email:
+   ```go
+   email.Send(ctx, contracts.EmailMessage{
+       To:      []string{"delivered@resend.dev"},
+       Subject: "modkit integration test",
+       Body:    contracts.EmailBody{Text: "it works"},
+   })
+   ```
+3. Hit the test route — should return 200 with a `messageId` in the result
+4. Check the Resend dashboard — the test email should appear in the logs
+5. Remove the test route after verifying
 
 ## Do NOT
 

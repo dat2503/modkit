@@ -16,7 +16,7 @@ Include this module when:
 1. Import `CacheService` from `contracts/go/cache.go`
 2. Initialize in bootstrap **before auth and jobs**:
    ```go
-   cacheSvc := redis.New(redis.Config{
+   cacheSvc, err := redis.New(redis.Config{
        URL:            cfg.Cache.RedisURL,
        MaxConnections: cfg.Cache.MaxConnections,
    })
@@ -94,6 +94,21 @@ CACHE_PROVIDER=redis
 REDIS_URL=redis://localhost:6379      # sensitive (contains password in production)
 REDIS_MAX_CONNECTIONS=10
 ```
+
+## Integration spec
+
+After wiring, verify with:
+
+1. Start infrastructure: `make infra-up` — Redis should be healthy on port 6379
+2. Add a temporary test route that sets and gets a cache key:
+   ```
+   cache.Set(ctx, "test:ping", []byte("pong"), 60*time.Second)
+   val, err := cache.Get(ctx, "test:ping")
+   // val should equal []byte("pong")
+   ```
+3. Hit the test route — verify the response returns `"pong"`
+4. Verify via Redis CLI: `redis-cli GET test:ping` should return `pong`
+5. Wait 60s or run `redis-cli DEL test:ping` — `Get` should return a cache miss
 
 ## Do NOT
 

@@ -12,7 +12,7 @@ Initialize it first, before every other module.
 1. Import `ObservabilityService` from `contracts/go/observability.go`
 2. Initialize **first** in bootstrap:
    ```go
-   obsSvc := otel.New(otel.Config{
+   obsSvc, err := otel.New(otel.Config{
        ServiceName: cfg.Obs.ServiceName,
        Endpoint:    cfg.Obs.OTLPEndpoint,
        Headers:     cfg.Obs.OTLPHeaders,
@@ -94,6 +94,15 @@ OTEL_EXPORTER_OTLP_HEADERS=                         # for cloud providers
 LOG_LEVEL=info
 LOG_FORMAT=json
 ```
+
+## Integration spec
+
+After wiring, verify with:
+
+1. Start the app — structured JSON logs should appear on stdout with `service_name`, `level`, and `timestamp` fields
+2. Hit any API endpoint (e.g. `GET /api/v1/health`) — a log line with `http.method` and `http.url` should appear
+3. Call `obs.Log(ctx, LogLevelInfo, "test", nil)` from any handler — verify the log line appears with the correct level
+4. Shut down the app gracefully (Ctrl+C) — verify `Shutdown()` completes without errors in the logs
 
 ## Do NOT
 

@@ -198,6 +198,17 @@ CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_WEBHOOK_SECRET=whsec_...           # sensitive, only if using webhooks
 ```
 
+## Integration spec
+
+After wiring, verify with:
+
+1. Start the app and infrastructure (`make dev`)
+2. Sign up via the frontend form or `POST /api/auth/sign-up/email` with `{ "email": "test@test.com", "password": "testpassword123", "name": "Test" }`
+3. Sign in via `POST /api/auth/sign-in/email` — response should include a session token
+4. Hit a protected route (`GET /api/v1/me`) with the `Authorization: Bearer <token>` header — should return user data
+5. Hit the same route without the header — should return 401 Unauthorized
+6. Verify the session is cached: `redis-cli GET sessions:<sessionID>` should return session data
+
 ## Do NOT
 
 - Store passwords — Better Auth handles all credential storage

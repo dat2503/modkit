@@ -78,6 +78,16 @@ git push origin v1.0.0
 # Watch: GitHub Actions → deploy-production.yaml
 ```
 
+## Integration spec
+
+After wiring, verify with:
+
+1. Push the scaffolded project to a GitHub repository
+2. Create a branch and open a pull request — the `ci.yaml` workflow should trigger automatically
+3. Verify the CI workflow runs: build, test, and lint steps should all pass on the scaffold's default code
+4. Merge the PR to `main` — the `deploy-staging.yaml` workflow should trigger (it will fail without secrets configured, but it should trigger)
+5. Confirm the workflow files exist at `.github/workflows/ci.yaml`, `deploy-staging.yaml`, and `deploy-production.yaml`
+
 ## Do NOT
 
 - Deploy to production without a staging approval

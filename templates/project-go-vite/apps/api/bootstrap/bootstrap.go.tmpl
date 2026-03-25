@@ -154,7 +154,7 @@ func Init(ctx context.Context) (http.Handler, func(context.Context), error) {
 		Concurrency:  cfg.Jobs.Concurrency,
 		MaxRetries:   cfg.Jobs.MaxRetries,
 		DefaultQueue: cfg.Jobs.DefaultQueue,
-	}, cacheSvc)
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("init jobs: %w", err)
 	}

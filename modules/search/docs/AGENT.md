@@ -20,7 +20,7 @@ Do NOT include when:
 1. Import `SearchService` from `contracts/go/search.go`
 2. Initialize in bootstrap:
    ```go
-   searchSvc := elasticsearch.New(elasticsearch.Config{
+   searchSvc, err := elasticsearch.New(elasticsearch.Config{
        URL:         cfg.Search.ElasticsearchURL,
        APIKey:      cfg.Search.APIKey,
        IndexPrefix: cfg.Search.IndexPrefix,
@@ -106,6 +106,23 @@ Run Elasticsearch via Docker:
 docker run -p 9200:9200 -e "discovery.type=single-node" \
   -e "xpack.security.enabled=false" elasticsearch:8.12.0
 ```
+
+## Integration spec
+
+After wiring, verify with:
+
+1. Start Elasticsearch: `make infra-up` (or `docker run -p 9200:9200 -e "discovery.type=single-node" -e "xpack.security.enabled=false" elasticsearch:8.13.0`)
+2. Verify Elasticsearch is healthy: `curl http://localhost:9200/_cluster/health` should not show `red`
+3. Index a test document:
+   ```go
+   search.Index(ctx, "test_items", "1", map[string]any{"title": "Hello World", "body": "integration test"})
+   ```
+4. Search for it:
+   ```go
+   results, err := search.Search(ctx, "test_items", contracts.SearchQuery{Query: "Hello"})
+   // results should contain the document with ID "1"
+   ```
+5. Clean up: delete the test index via `curl -X DELETE http://localhost:9200/test_items`
 
 ## Do NOT
 

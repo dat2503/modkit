@@ -18,7 +18,7 @@ Do NOT use when:
 1. Import `PaymentsService` from `contracts/go/payments.go`
 2. Initialize in bootstrap:
    ```go
-   paymentsSvc := stripe.New(stripe.Config{
+   paymentsSvc, err := stripe.New(stripe.Config{
        SecretKey:     cfg.Payments.SecretKey,
        WebhookSecret: cfg.Payments.WebhookSecret,
    })
@@ -88,6 +88,16 @@ STRIPE_SECRET_KEY=sk_test_...        # sensitive
 STRIPE_WEBHOOK_SECRET=whsec_...      # sensitive
 STRIPE_PUBLISHABLE_KEY=pk_test_...   # frontend only
 ```
+
+## Integration spec
+
+After wiring, verify with:
+
+1. Set `STRIPE_SECRET_KEY` to a Stripe test-mode key (`sk_test_...`)
+2. Create a test checkout session: `POST /api/v1/checkout` with a valid price ID — should return a Stripe checkout URL
+3. Open the URL — you should see the Stripe-hosted checkout page in test mode
+4. Use Stripe CLI to forward webhooks: `stripe listen --forward-to localhost:8080/api/v1/webhooks/stripe`
+5. Complete a test payment using card `4242 4242 4242 4242` — the `checkout.session.completed` webhook should arrive and log in your app
 
 ## Do NOT
 

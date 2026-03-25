@@ -99,6 +99,20 @@ FLAGSMITH_API_URL=https://edge.api.flagsmith.com/api/v1/
 FLAGSMITH_CACHE_TTL_SECONDS=60
 ```
 
+## Integration spec
+
+After wiring, verify with:
+
+1. Create a test flag in the Flagsmith dashboard named `test_flag` (enabled by default)
+2. Set `FLAGSMITH_SERVER_KEY` to your server-side environment key
+3. Check the flag from a handler:
+   ```go
+   enabled, err := flags.IsEnabled(ctx, "test_flag", contracts.FlagContext{})
+   // enabled should be true, err should be nil
+   ```
+4. Disable `test_flag` in the Flagsmith dashboard — after cache TTL expires, `IsEnabled` should return `false`
+5. Test with user targeting: pass a `FlagContext{UserID: "user-123"}` and verify segment rules apply
+
 ## Do NOT
 
 - Use feature flags as a substitute for proper config management

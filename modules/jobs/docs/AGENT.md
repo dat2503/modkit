@@ -23,7 +23,7 @@ No separate Redis instance needed — the same Redis serves both.
 1. Import `JobsService` from `contracts/go/jobs.go`
 2. Initialize in bootstrap **after cache**:
    ```go
-   jobsSvc := asynq.New(asynq.Config{
+   jobsSvc, err := asynq.New(asynq.Config{
        RedisURL:    cfg.Cache.RedisURL,  // reuse cache Redis
        Concurrency: cfg.Jobs.Concurrency,
        MaxRetries:  cfg.Jobs.MaxRetries,
@@ -96,7 +96,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
     if err != nil { ... }
 
     // Don't block on email — enqueue async
-    h.jobs.Enqueue(ctx, "email:send_welcome", WelcomeEmailPayload{UserID: user.ID})
+    _, _ = h.jobs.Enqueue(ctx, "email:send_welcome", WelcomeEmailPayload{UserID: user.ID})
 
     writeJSON(w, http.StatusCreated, user)
 }
@@ -118,6 +118,27 @@ JOBS_DEFAULT_QUEUE=default
 JOBS_MAX_RETRIES=3
 # REDIS_URL comes from the cache module — reused automatically
 ```
+
+## Integration spec
+
+After wiring, verify with:
+
+1. Ensure Redis is running (`make infra-up`)
+2. Register a test handler during bootstrap:
+   ```go
+   jobsSvc.RegisterHandler("test:ping", func(ctx context.Context, payload []byte) error {
+       log.Info("job executed", "payload", string(payload))
+       return nil
+   })
+   ```
+3. Add a temporary test route that enqueues a job:
+   ```go
+   handle, err := jobs.Enqueue(ctx, "test:ping", map[string]string{"msg": "hello"})
+   // handle.ID should be non-empty
+   ```
+4. Hit the test route — the job handler should log `job executed` within a few seconds
+5. Verify in Redis: `redis-cli KEYS asynq:*` should show queue entries
+6. Remove the test handler and route after verifying
 
 ## Do NOT
 

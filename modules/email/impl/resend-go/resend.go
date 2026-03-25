@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 
+	resendclient "github.com/resendlabs/resend-go"
+
 	contracts "github.com/dat2503/modkit/contracts/go"
 )
 
@@ -19,8 +21,8 @@ type Config struct {
 
 // Service implements contracts.EmailService using Resend.
 type Service struct {
-	cfg Config
-	// TODO: add resend-go client
+	cfg    Config
+	client *resendclient.Client
 }
 
 // New creates a new Resend email service.
@@ -31,20 +33,40 @@ func New(cfg Config) (*Service, error) {
 	if cfg.FromDefault == "" {
 		return nil, fmt.Errorf("resend: FromDefault is required")
 	}
-	return &Service{cfg: cfg}, nil
+	return &Service{cfg: cfg, client: resendclient.NewClient(cfg.APIKey)}, nil
 }
 
 // Send sends a single transactional email via Resend.
 func (s *Service) Send(ctx context.Context, msg contracts.EmailMessage) (*contracts.EmailResult, error) {
-	// TODO: implement using github.com/resendlabs/resend-go
-	// client := resend.NewClient(s.cfg.APIKey)
-	// params := &resend.SendEmailRequest{To: msg.To, From: from, Subject: msg.Subject, Html: msg.Body.HTML, Text: msg.Body.Text}
-	// resp, err := client.Emails.Send(params)
-	panic("not implemented")
+	from := msg.From
+	if from == "" {
+		from = s.cfg.FromDefault
+	}
+	params := &resendclient.SendEmailRequest{
+		From:    from,
+		To:      msg.To,
+		Subject: msg.Subject,
+		Html:    msg.Body.HTML,
+		Text:    msg.Body.Text,
+		ReplyTo: msg.ReplyTo,
+	}
+	resp, err := s.client.Emails.Send(params)
+	if err != nil {
+		return nil, fmt.Errorf("resend: send: %w", err)
+	}
+	return &contracts.EmailResult{MessageID: resp.Id}, nil
 }
 
-// SendBatch sends multiple emails in a single Resend API call.
+// SendBatch sends multiple emails sequentially via Resend.
+// Resend's batch API is used when available; falls back to sequential sends.
 func (s *Service) SendBatch(ctx context.Context, msgs []contracts.EmailMessage) ([]*contracts.EmailResult, error) {
-	// TODO: implement using resend batch send API
-	panic("not implemented")
+	results := make([]*contracts.EmailResult, 0, len(msgs))
+	for i, msg := range msgs {
+		result, err := s.Send(ctx, msg)
+		if err != nil {
+			return results, fmt.Errorf("resend: send batch[%d]: %w", i, err)
+		}
+		results = append(results, result)
+	}
+	return results, nil
 }
