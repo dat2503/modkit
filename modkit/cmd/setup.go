@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -67,26 +68,48 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// linkOrCopyCache creates ~/.modkit/cache/ as a symlink to the registry,
-// or updates it if it already points elsewhere.
+// linkOrCopyCache points ~/.modkit/cache/ at the registry directory.
+// On Windows it uses a directory junction (no elevation required).
+// On Unix it uses a symlink.
+// If the cache is already a git repo (old clone), it runs git pull to sync it.
 func linkOrCopyCache(registryPath, cacheDir string) error {
 	parent := filepath.Dir(cacheDir)
 	if err := os.MkdirAll(parent, 0755); err != nil {
 		return err
 	}
 
-	// Check if cache already exists and is correct.
+	// If it's already a symlink/junction pointing at the right place, done.
 	if target, err := os.Readlink(cacheDir); err == nil {
 		if filepath.Clean(target) == filepath.Clean(registryPath) {
-			return nil // already correct
+			return nil
 		}
-		os.Remove(cacheDir) // remove stale link
+		// Wrong target — remove and re-link.
+		if err := removeLink(cacheDir); err != nil {
+			return fmt.Errorf("remove stale cache link: %w", err)
+		}
 	} else if fi, err := os.Stat(cacheDir); err == nil && fi.IsDir() {
-		// It's a real directory, not a symlink. Leave it.
+		// Real directory. If it's a git repo, pull to sync it.
+		if _, gerr := os.Stat(filepath.Join(cacheDir, ".git")); gerr == nil {
+			fmt.Println("  Cache is a git clone — pulling latest…")
+			out, perr := runGitPull(cacheDir)
+			if perr != nil {
+				return fmt.Errorf("git pull in cache: %w\n%s", perr, out)
+			}
+			fmt.Printf("  Cache synced via git pull\n")
+			return nil
+		}
+		// Non-git directory — leave it alone to avoid destroying user data.
+		fmt.Println("  Warning: ~/.modkit/cache exists as a plain directory; skipping link")
 		return nil
 	}
 
-	return os.Symlink(registryPath, cacheDir)
+	return createLink(registryPath, cacheDir)
+}
+
+func runGitPull(dir string) (string, error) {
+	cmd := exec.Command("git", "-C", dir, "pull", "--ff-only", "origin", "main")
+	out, err := cmd.CombinedOutput()
+	return string(out), err
 }
 
 const modkitSection = `## Web App Projects
