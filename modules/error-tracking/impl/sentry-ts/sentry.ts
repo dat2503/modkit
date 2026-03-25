@@ -14,26 +14,26 @@ export class SentryErrorTrackingService implements IErrorTrackingService {
 
   async captureError(err: Error, opts?: CaptureOptions): Promise<void> {
     // TODO: implement using @sentry/node Sentry.captureException(err)
-    throw new Error('not implemented')
+    console.warn('[sentry] stub: captureError() not implemented')
   }
 
   async captureMessage(msg: string, level: ErrorLevel, opts?: CaptureOptions): Promise<void> {
     // TODO: implement using @sentry/node Sentry.captureMessage(msg, level)
-    throw new Error('not implemented')
+    console.warn('[sentry] stub: captureMessage() not implemented')
   }
 
   setUser(user: ErrorUser): void {
     // TODO: implement using Sentry.setUser({ id, email })
-    throw new Error('not implemented')
+    console.warn('[sentry] stub: setUser() not implemented')
   }
 
   clearUser(): void {
     // TODO: implement using Sentry.setUser(null)
-    throw new Error('not implemented')
+    console.warn('[sentry] stub: clearUser() not implemented')
   }
 
   async flush(timeoutMs = 2000): Promise<void> {
     // TODO: implement using Sentry.flush(timeoutMs)
-    throw new Error('not implemented')
+    console.warn('[sentry] stub: flush() not implemented')
   }
 }

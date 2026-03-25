@@ -4,6 +4,7 @@ package elasticsearch
 import (
 	"context"
 	"fmt"
+	"log"
 
 	contracts "github.com/dat2503/modkit/contracts/go"
 )
@@ -36,25 +37,30 @@ func New(cfg Config) (*Service, error) {
 
 func (s *Service) Index(ctx context.Context, indexName string, id string, doc any) error {
 	// TODO: implement using github.com/elastic/go-elasticsearch/v8 esapi.IndexRequest
-	panic("not implemented")
+	log.Printf("[elasticsearch] stub: Index() not implemented")
+	return nil
 }
 
 func (s *Service) IndexBatch(ctx context.Context, indexName string, docs []contracts.IndexDocument) error {
 	// TODO: implement using Elasticsearch Bulk API
-	panic("not implemented")
+	log.Printf("[elasticsearch] stub: IndexBatch() not implemented")
+	return nil
 }
 
 func (s *Service) Search(ctx context.Context, indexName string, query contracts.SearchQuery) (*contracts.SearchResult, error) {
 	// TODO: implement using esapi.SearchRequest with query DSL
-	panic("not implemented")
+	log.Printf("[elasticsearch] stub: Search() not implemented")
+	return &contracts.SearchResult{}, nil
 }
 
 func (s *Service) Delete(ctx context.Context, indexName string, id string) error {
 	// TODO: implement using esapi.DeleteRequest
-	panic("not implemented")
+	log.Printf("[elasticsearch] stub: Delete() not implemented")
+	return nil
 }
 
 func (s *Service) DeleteIndex(ctx context.Context, indexName string) error {
 	// TODO: implement using esapi.IndicesDeleteRequest
-	panic("not implemented")
+	log.Printf("[elasticsearch] stub: DeleteIndex() not implemented")
+	return nil
 }

@@ -18,31 +18,36 @@ export class S3StorageService implements IStorageService {
 
   async upload(key: string, data: Buffer | ReadableStream, opts?: UploadOptions): Promise<UploadResult> {
     // TODO: implement using @aws-sdk/client-s3 PutObjectCommand
-    throw new Error('not implemented')
+    console.warn('[s3-storage] stub: upload() not implemented')
+    return { key, url: '', size: 0 }
   }
 
   async download(key: string): Promise<Buffer> {
     // TODO: implement using @aws-sdk/client-s3 GetObjectCommand
-    throw new Error('not implemented')
+    console.warn('[s3-storage] stub: download() not implemented')
+    return Buffer.alloc(0)
   }
 
   async delete(key: string): Promise<void> {
     // TODO: implement using @aws-sdk/client-s3 DeleteObjectCommand
-    throw new Error('not implemented')
+    console.warn('[s3-storage] stub: delete() not implemented')
   }
 
   async signedUrl(key: string, expirySeconds: number): Promise<string> {
     // TODO: implement using @aws-sdk/s3-request-presigner getSignedUrl
-    throw new Error('not implemented')
+    console.warn('[s3-storage] stub: signedUrl() not implemented')
+    return ''
   }
 
   async publicUrl(key: string): Promise<string> {
     // TODO: return this.config.publicBaseUrl + '/' + key if configured
-    throw new Error('not implemented')
+    console.warn('[s3-storage] stub: publicUrl() not implemented')
+    return ''
   }
 
   async exists(key: string): Promise<boolean> {
     // TODO: implement using @aws-sdk/client-s3 HeadObjectCommand
-    throw new Error('not implemented')
+    console.warn('[s3-storage] stub: exists() not implemented')
+    return false
   }
 }

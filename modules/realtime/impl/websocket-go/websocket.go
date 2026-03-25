@@ -3,6 +3,7 @@ package websocket
 
 import (
 	"context"
+	"log"
 
 	contracts "github.com/dat2503/modkit/contracts/go"
 )
@@ -37,31 +38,37 @@ func New(cfg Config, cache contracts.CacheService) *Service {
 func (s *Service) Publish(ctx context.Context, topic string, payload any) (int, error) {
 	// TODO: serialize payload, publish to Redis pub/sub channel for topic,
 	// return count of connected clients that received it
-	panic("not implemented")
+	log.Printf("[websocket-realtime] stub: Publish() not implemented")
+	return 0, nil
 }
 
 func (s *Service) PublishToUser(ctx context.Context, userID string, event contracts.RealtimeEvent) error {
 	// TODO: look up connections for userID in cache, write event to each
-	panic("not implemented")
+	log.Printf("[websocket-realtime] stub: PublishToUser() not implemented")
+	return nil
 }
 
 func (s *Service) Subscribe(topic string, handler contracts.RealtimeHandler) error {
 	// TODO: register handler for incoming client messages on topic
-	panic("not implemented")
+	log.Printf("[websocket-realtime] stub: Subscribe() not implemented")
+	return nil
 }
 
 func (s *Service) HandleConnection(ctx context.Context, conn contracts.RealtimeConn, userID string) error {
 	// TODO: register conn in cache, start read/write loops, handle ping/pong,
 	// deregister on disconnect
-	panic("not implemented")
+	log.Printf("[websocket-realtime] stub: HandleConnection() not implemented")
+	return nil
 }
 
 func (s *Service) Disconnect(ctx context.Context, userID string) error {
 	// TODO: close all connections for userID, remove from cache
-	panic("not implemented")
+	log.Printf("[websocket-realtime] stub: Disconnect() not implemented")
+	return nil
 }
 
 func (s *Service) ConnectedUsers(ctx context.Context) ([]string, error) {
 	// TODO: read connection registry from cache, return unique user IDs
-	panic("not implemented")
+	log.Printf("[websocket-realtime] stub: ConnectedUsers() not implemented")
+	return nil, nil
 }

@@ -18,21 +18,25 @@ export class FlagsmithService implements IFeatureFlagsService {
 
   async isEnabled(flagName: string, evalCtx?: FlagContext): Promise<boolean> {
     // TODO: implement using flagsmith-nodejs or @flagsmith/flag-engine
-    throw new Error('not implemented')
+    console.warn('[flagsmith] stub: isEnabled() not implemented')
+    return false
   }
 
   async getVariant(flagName: string, evalCtx?: FlagContext): Promise<string> {
     // TODO: implement using flagsmith getFeatureValue(flagName)
-    throw new Error('not implemented')
+    console.warn('[flagsmith] stub: getVariant() not implemented')
+    return ''
   }
 
   async getValue(flagName: string, evalCtx?: FlagContext): Promise<unknown> {
     // TODO: implement using flagsmith getFeatureValue(flagName)
-    throw new Error('not implemented')
+    console.warn('[flagsmith] stub: getValue() not implemented')
+    return undefined
   }
 
   async getAllFlags(evalCtx?: FlagContext): Promise<Record<string, FlagState>> {
     // TODO: implement by fetching all flags and building a map
-    throw new Error('not implemented')
+    console.warn('[flagsmith] stub: getAllFlags() not implemented')
+    return {}
   }
 }

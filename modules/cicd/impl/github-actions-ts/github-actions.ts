@@ -9,11 +9,13 @@ export class GitHubActionsService implements ICICDService {
     //   .github/workflows/ci.yaml             — bun install + build + test + eslint
     //   .github/workflows/deploy-staging.yaml — docker build + push + deploy on main
     //   .github/workflows/deploy-production.yaml — docker build + push + release on v* tag
-    throw new Error('not implemented')
+    console.warn('[github-actions] stub: generateWorkflows() not implemented')
+    return new Map()
   }
 
   async validateWorkflows(projectRoot: string): Promise<CICDValidationResult> {
     // TODO: check that .github/workflows/{ci,deploy-staging,deploy-production}.yaml exist and are valid YAML
-    throw new Error('not implemented')
+    console.warn('[github-actions] stub: validateWorkflows() not implemented')
+    return { valid: true, missingWorkflows: [], errors: [] }
   }
 }

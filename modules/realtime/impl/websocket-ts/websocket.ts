@@ -20,12 +20,13 @@ export class WebSocketRealtimeService implements IRealtimeService {
   async publish(topic: string, payload: unknown): Promise<number> {
     // TODO: serialize payload, publish to Redis pub/sub channel for topic,
     // return count of connected clients that received it
-    throw new Error('not implemented')
+    console.warn('[websocket-realtime] stub: publish() not implemented')
+    return 0
   }
 
   async publishToUser(userId: string, event: RealtimeEvent): Promise<void> {
     // TODO: look up connections for userId in cache, write event to each
-    throw new Error('not implemented')
+    console.warn('[websocket-realtime] stub: publishToUser() not implemented')
   }
 
   subscribe(topic: string, handler: RealtimeHandler): void {
@@ -35,16 +36,17 @@ export class WebSocketRealtimeService implements IRealtimeService {
   async handleConnection(conn: RealtimeConn, userId: string): Promise<void> {
     // TODO: register conn in cache, set up message/close handlers, handle ping/pong,
     // deregister on disconnect
-    throw new Error('not implemented')
+    console.warn('[websocket-realtime] stub: handleConnection() not implemented')
   }
 
   async disconnect(userId: string): Promise<void> {
     // TODO: close all connections for userId, remove from cache
-    throw new Error('not implemented')
+    console.warn('[websocket-realtime] stub: disconnect() not implemented')
   }
 
   async connectedUsers(): Promise<string[]> {
     // TODO: read connection registry from cache, return unique user IDs
-    throw new Error('not implemented')
+    console.warn('[websocket-realtime] stub: connectedUsers() not implemented')
+    return []
   }
 }

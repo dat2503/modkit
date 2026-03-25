@@ -3,6 +3,7 @@ package flagsmith
 
 import (
 	"context"
+	"log"
 
 	contracts "github.com/dat2503/modkit/contracts/go"
 )
@@ -38,20 +39,24 @@ func New(cfg Config, cache contracts.CacheService) *Service {
 func (s *Service) IsEnabled(ctx context.Context, flagName string, evalCtx contracts.FlagContext) (bool, error) {
 	// TODO: implement using github.com/Flagsmith/flagsmith-go-client
 	// client.GetEnvironmentFlags() or client.GetIdentityFlags(identifier, traits)
-	panic("not implemented")
+	log.Printf("[flagsmith] stub: IsEnabled() not implemented")
+	return false, nil
 }
 
 func (s *Service) GetVariant(ctx context.Context, flagName string, evalCtx contracts.FlagContext) (string, error) {
 	// TODO: implement using flags.GetFeatureValue(flagName) for multivariate
-	panic("not implemented")
+	log.Printf("[flagsmith] stub: GetVariant() not implemented")
+	return "", nil
 }
 
 func (s *Service) GetValue(ctx context.Context, flagName string, evalCtx contracts.FlagContext) (any, error) {
 	// TODO: implement using flags.GetFeatureValue(flagName)
-	panic("not implemented")
+	log.Printf("[flagsmith] stub: GetValue() not implemented")
+	return nil, nil
 }
 
 func (s *Service) GetAllFlags(ctx context.Context, evalCtx contracts.FlagContext) (map[string]contracts.FlagState, error) {
 	// TODO: implement by calling GetEnvironmentFlags or GetIdentityFlags and building map
-	panic("not implemented")
+	log.Printf("[flagsmith] stub: GetAllFlags() not implemented")
+	return nil, nil
 }

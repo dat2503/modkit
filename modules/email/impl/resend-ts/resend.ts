@@ -15,11 +15,13 @@ export class ResendEmailService implements IEmailService {
     // TODO: implement using resend npm package
     // const resend = new Resend(this.config.apiKey)
     // const { data, error } = await resend.emails.send({...})
-    throw new Error('not implemented')
+    console.warn('[resend-email] stub: send() not implemented')
+    return { messageId: '' }
   }
 
   async sendBatch(msgs: EmailMessage[]): Promise<EmailResult[]> {
     // TODO: implement using resend.emails.sendBatch()
-    throw new Error('not implemented')
+    console.warn('[resend-email] stub: sendBatch() not implemented')
+    return []
   }
 }

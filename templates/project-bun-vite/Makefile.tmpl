@@ -4,13 +4,13 @@
 
 dev:
 	@echo "Starting API (:8080) and web (:3000)..."
-	@cd apps/api && bun run dev & cd apps/web && bun run dev
+	@cd apps/api && bun run --env-file ../../.env dev & cd apps/web && bun run --env-file ../../.env dev
 
 dev-api:
-	cd apps/api && bun run dev
+	cd apps/api && bun run --env-file ../../.env dev
 
 dev-web:
-	cd apps/web && bun run dev
+	cd apps/web && bun run --env-file ../../.env dev
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
@@ -19,25 +19,25 @@ build:
 	$(MAKE) build-web
 
 build-api:
-	cd apps/api && bun run build
+	cd apps/api && bun run --env-file ../../.env build
 
 build-web:
-	cd apps/web && bun run build
+	cd apps/web && bun run --env-file ../../.env build
 
 # ── Test ──────────────────────────────────────────────────────────────────────
 
 test:
-	cd apps/api && bun test
+	cd apps/api && bun test --env-file ../../.env
 
 # ── Lint ──────────────────────────────────────────────────────────────────────
 
 lint:
-	cd apps/api && bun run lint
-	cd apps/web && bun run lint
+	cd apps/api && bun run --env-file ../../.env lint
+	cd apps/web && bun run --env-file ../../.env lint
 
 type-check:
-	cd apps/api && bun run type-check
-	cd apps/web && bun run type-check
+	cd apps/api && bun run --env-file ../../.env type-check
+	cd apps/web && bun run --env-file ../../.env type-check
 
 # ── Infrastructure ────────────────────────────────────────────────────────────
 

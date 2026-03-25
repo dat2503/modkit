@@ -24,8 +24,12 @@ It runs inside your Bun backend process (or as a sidecar for Go). No external au
 
 ### How to wire (Bun)
 
-1. Install Better Auth: `bun add better-auth`
-2. Create `apps/api/src/auth.ts` — configure the Better Auth instance:
+1. Install Better Auth and the PostgreSQL driver: `bun add better-auth pg`
+2. Set up the database — Better Auth requires a PostgreSQL database to be running and the tables to exist before the app starts:
+   - **Auto-migrate (recommended):** `npx @better-auth/cli migrate` — creates all required tables automatically
+   - **Manual SQL:** `npx @better-auth/cli generate` — outputs the SQL so you can run it yourself
+   - **Core tables created:** `user`, `session`, `account`, `verification` (plus any plugin-specific tables)
+3. Create `apps/api/src/auth.ts` — configure the Better Auth instance:
    ```typescript
    import { betterAuth } from 'better-auth'
    import { Pool } from 'pg'
@@ -42,11 +46,11 @@ It runs inside your Bun backend process (or as a sidecar for Go). No external au
      },
    })
    ```
-3. Mount the Better Auth handler on your Hono/Express app:
+4. Mount the Better Auth handler on your Hono/Express app:
    ```typescript
    app.all('/api/auth/*', (c) => auth.handler(c.req.raw))
    ```
-4. Initialize the `BetterAuthService` in bootstrap after cache:
+5. Initialize the `BetterAuthService` in bootstrap after cache:
    ```typescript
    import { BetterAuthService } from './modules/auth/better_auth'
 
@@ -55,7 +59,7 @@ It runs inside your Bun backend process (or as a sidecar for Go). No external au
      secret: config.auth.secret,
    }, cache)
    ```
-5. Register middleware on protected routes:
+6. Register middleware on protected routes:
    ```typescript
    app.use('/api/v1/*', authMiddleware(authSvc))
    ```
@@ -186,8 +190,9 @@ authSvc, err := clerk.New(clerk.Config{
 **Better Auth (default):**
 ```
 AUTH_PROVIDER=better-auth
-BETTER_AUTH_URL=http://localhost:3000     # URL where Better Auth runs
-BETTER_AUTH_SECRET=...                   # generate: openssl rand -hex 32
+DATABASE_URL=postgres://user:pass@localhost:5432/myapp   # PostgreSQL connection (required for migrations and runtime)
+BETTER_AUTH_URL=http://localhost:3000                    # URL where Better Auth runs
+BETTER_AUTH_SECRET=...                                   # generate: openssl rand -hex 32
 ```
 
 **Clerk (alternative):**

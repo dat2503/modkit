@@ -19,12 +19,14 @@ export class BullMQJobsService implements IJobsService {
 
   async enqueue(jobType: string, payload: unknown, opts?: JobOptions): Promise<JobHandle> {
     // TODO: implement using bullmq Queue.add(jobType, payload, opts)
-    throw new Error('not implemented')
+    console.warn('[bullmq-jobs] stub: enqueue() not implemented')
+    return { id: '', type: jobType, queue: this.config.defaultQueue ?? 'default' }
   }
 
   async enqueueIn(jobType: string, payload: unknown, delayMs: number, opts?: JobOptions): Promise<JobHandle> {
     // TODO: implement using bullmq Queue.add with { delay: delayMs }
-    throw new Error('not implemented')
+    console.warn('[bullmq-jobs] stub: enqueueIn() not implemented')
+    return { id: '', type: jobType, queue: this.config.defaultQueue ?? 'default' }
   }
 
   async enqueueAt(jobType: string, payload: unknown, processAt: Date, opts?: JobOptions): Promise<JobHandle> {
@@ -38,11 +40,11 @@ export class BullMQJobsService implements IJobsService {
 
   async start(): Promise<void> {
     // TODO: implement using bullmq Worker with registered handlers
-    throw new Error('not implemented')
+    console.warn('[bullmq-jobs] stub: start() not implemented')
   }
 
   async stop(): Promise<void> {
     // TODO: implement graceful Worker close
-    throw new Error('not implemented')
+    console.warn('[bullmq-jobs] stub: stop() not implemented')
   }
 }

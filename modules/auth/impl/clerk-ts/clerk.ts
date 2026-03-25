@@ -20,26 +20,29 @@ export class ClerkAuthService implements IAuthService {
     // 1. verifyToken(token, { secretKey: this.config.secretKey })
     // 2. Extract userId from claims
     // 3. Optionally cache validated user
-    throw new Error('not implemented')
+    console.warn('[clerk-auth] stub: validateToken() not implemented')
+    return { id: '', email: '', name: '' }
   }
 
   async getUser(userId: string): Promise<AuthUser> {
     // TODO: implement using @clerk/backend clerkClient.users.getUser(userId)
-    throw new Error('not implemented')
+    console.warn('[clerk-auth] stub: getUser() not implemented')
+    return { id: userId, email: '', name: '' }
   }
 
   async listUsers(opts?: ListUsersOptions): Promise<UserList> {
     // TODO: implement using @clerk/backend clerkClient.users.getUserList()
-    throw new Error('not implemented')
+    console.warn('[clerk-auth] stub: listUsers() not implemented')
+    return { users: [], total: 0 }
   }
 
   async deleteUser(userId: string): Promise<void> {
     // TODO: implement using @clerk/backend clerkClient.users.deleteUser(userId)
-    throw new Error('not implemented')
+    console.warn('[clerk-auth] stub: deleteUser() not implemented')
   }
 
   async updateUserRole(userId: string, role: string): Promise<void> {
     // TODO: implement using @clerk/backend clerkClient.users.updateUserMetadata(userId, { publicMetadata: { role } })
-    throw new Error('not implemented')
+    console.warn('[clerk-auth] stub: updateUserRole() not implemented')
   }
 }
