@@ -108,6 +108,78 @@ git push origin main    # triggers deploy-production.yaml automatically
 
 ---
 
+## Compliance Posture (§28)
+
+The `COMPLIANCE_POSTURE` config field controls which additional CI/CD files are generated beyond the §24/§25 baseline. Posture is auto-suggested from project signals (§28.2) and confirmed at Phase 1.
+
+### Posture: `solo` (team of 1, prototype, <100 users)
+
+No additional files. §24/§25 baseline is sufficient:
+- gosec/semgrep + govulncheck/npm audit + gitleaks in CI (already in §25)
+- Conventional Commits + CHANGELOG (already in §24)
+
+### Posture: `startup` (small team or public users)
+
+Generated from `modules/cicd/templates/startup/`:
+
+| File | Purpose |
+|------|---------|
+| `.github/dependabot.yml` | Auto-update PRs for gomod/npm/github-actions weekly |
+| `.github/PULL_REQUEST_TEMPLATE.md` | Lightweight PR checklist |
+| `codecov.yml` | 60% coverage threshold gate |
+| `scripts/setup-branch-protection.sh` | Branch protection via `gh` CLI — run once after repo setup |
+
+CI job additions (added to `ci.yaml`):
+```yaml
+- name: Container image scan
+  uses: aquasecurity/trivy-action@master
+  with:
+    image-ref: ${{ env.IMAGE_TAG }}
+    severity: HIGH,CRITICAL
+    exit-code: 1
+
+- name: Upload coverage
+  uses: codecov/codecov-action@v4
+```
+
+### Posture: `enterprise` (regulated, B2B SaaS, enterprise customers)
+
+Everything in `startup`, plus generated from `modules/cicd/templates/enterprise/`:
+
+| File | Purpose |
+|------|---------|
+| `.github/CODEOWNERS` | Required reviewers per directory |
+| `.github/ISSUE_TEMPLATE/bug_report.md` | Structured bug report |
+| `.github/ISSUE_TEMPLATE/feature_request.md` | Structured feature request |
+| `codecov.yml` | 80% coverage threshold (overrides startup version) |
+
+CI/deploy job additions:
+```yaml
+# In ci.yaml:
+- name: Generate SBOM
+  uses: anchore/sbom-action@v0
+  with:
+    image: ${{ env.IMAGE_TAG }}
+    format: spdx-json
+    output-file: sbom.spdx.json
+
+- name: License compliance
+  run: |
+    go install github.com/google/go-licenses@latest
+    go-licenses check ./... --disallowed_types=restricted
+
+# In deploy-production.yaml:
+- name: Sign container image
+  uses: sigstore/cosign-installer@v3
+  run: cosign sign --yes ${{ env.IMAGE_TAG }}
+```
+
+### Posture promotion
+
+Posture changes follow §21.6 evolution protocol — the agent documents the trigger, proposes the upgrade, human approves. New template files are added, no existing files removed.
+
+---
+
 ## Integration spec
 
 After scaffold, verify with:

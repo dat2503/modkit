@@ -47,6 +47,14 @@ export interface CICDConfig {
 
   /** Railway project ID (railway impl only). */
   railwayProjectId?: string;
+
+  /**
+   * Compliance posture controlling which CI/CD additions are generated beyond the baseline.
+   * "solo" = baseline only, "startup" = Dependabot/Trivy/PR template/coverage gate,
+   * "enterprise" = full suite (SBOM/cosign/CODEOWNERS/license scan/issue templates).
+   * Defaults to "startup". See composition-rulebook.md §28.
+   */
+  compliancePosture?: 'solo' | 'startup' | 'enterprise';
 }
 
 /** Result of validateWorkflows. */

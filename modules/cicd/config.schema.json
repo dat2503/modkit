@@ -18,8 +18,14 @@
     "RAILWAY_PROJECT_ID": {
       "type": "string",
       "description": "Railway project ID (railway impl only). Store as a GitHub Actions secret."
+    },
+    "COMPLIANCE_POSTURE": {
+      "type": "string",
+      "enum": ["solo", "startup", "enterprise"],
+      "default": "startup",
+      "description": "Compliance posture driving which CI/CD additions are generated (§28). solo=baseline only, startup=adds Dependabot/Trivy/PR template/coverage, enterprise=full suite including SBOM/cosign/CODEOWNERS."
     }
   },
   "required": ["CICD_PROVIDER"],
-  "notes": "Config files (vercel.json, railway.toml) and workflow files are generated at project scaffold time. All secrets are stored as GitHub Actions secrets, not in .env."
+  "notes": "Config files (vercel.json, railway.toml) and workflow files are generated at project scaffold time. All secrets are stored as GitHub Actions secrets, not in .env. COMPLIANCE_POSTURE controls which additional CI/CD jobs and .github/ templates are scaffolded."
 }

@@ -46,6 +46,12 @@ type CICDConfig struct {
 
 	// RailwayProjectID is the Railway project ID (railway impl only).
 	RailwayProjectID string
+
+	// CompliancePosture controls which CI/CD additions are generated beyond the baseline.
+	// "solo" = baseline only (SAST/SCA/secrets), "startup" = adds Dependabot/Trivy/PR template/coverage,
+	// "enterprise" = full suite (SBOM/cosign/CODEOWNERS/license scan/issue templates).
+	// Defaults to "startup" if empty. See composition-rulebook.md §28.
+	CompliancePosture string
 }
 
 // CICDValidationResult is the result of ValidateWorkflows.
