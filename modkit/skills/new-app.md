@@ -152,3 +152,16 @@ Post the self-review.log YAML block to chat. Continue to next milestone.
 **Guardrails:** respect hard limits (§17) even if user says "keep going." Never self-resume after a guardrail trigger.
 
 Follow composition-rulebook.md §19–§22 throughout.
+
+## Step 7 — Operate (Phase 6)
+
+After Phase 5 deploy succeeds, transition to ongoing operations via the `/operate` skill.
+
+Phase 6 runs in three sub-phases:
+- **6a** (one-time): emit `slo.yaml` and `alerts.yaml` — measurable targets before the system has time to regress
+- **6b** (continuous): evolution loop — when a measured signal fires, propose an architecture amendment, get approval, implement
+- **6c** (weekly): dependency scan + security scan + secret rotation check + monthly backup drill
+
+**Reference:** Playbook Phase 6, composition-rulebook.md §23–§26.
+
+**This step has no end** — `/operate` can be re-run at any time to check 6c status or respond to a 6b trigger.
