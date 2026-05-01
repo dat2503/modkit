@@ -1694,3 +1694,153 @@ pg_restore -h staging-db -U postgres -d myapp_staging latest.dump
 ```
 
 Failing a restore drill means the backup is untrustworthy. Treat it as a P1 incident.
+
+---
+
+## §27 Learning Loop [MVP]
+
+The learning loop closes the feedback gap between per-project mistakes and future project knowledge. Without it, every new project starts from zero — patterns from past incidents stay locked in per-project postmortems.
+
+### §27.1 The Catalog
+
+`learnings/catalog.yaml` at the registry root is the cross-project lessons store. It is:
+- Registry-level (not per-project)
+- Agent-augmented over time via `/learn`, human-approved before write
+- Loaded once at `/new-app` Step 1 alongside the playbook and rulebook
+- Queried at Phase 2 architecture to surface relevant past insights
+
+Schema per entry:
+```yaml
+- id: "<domain>-<NNN>"
+  category: bug | anti-pattern | integration-gotcha | performance | security | reuse-opportunity
+  domains: [list of modules/domains]
+  title: "<≤80-char one-liner>"
+  lesson: "<what to do or not do — generalized, no project-specific names>"
+  trigger: "<project signal or condition that makes this lesson relevant>"
+  source: "<postmortem ID, amendment ID, or 'manual'>"
+  date_added: "ISO-8601"
+```
+
+### §27.2 What Qualifies as a Catalog Entry
+
+A lesson qualifies when:
+- It would have changed a Phase 2 architectural decision if known earlier
+- It recurs across >1 project OR the failure mode is non-obvious enough to be a "gotcha"
+- It is generalizable — strip project-specific names, keep the principle
+
+A lesson does NOT qualify when:
+- It is already covered by §20-§22 rules (don't duplicate the rulebook in the catalog)
+- It is purely project-specific context ("the client wanted X") with no reusable principle
+- It is a one-off environment issue unlikely to recur
+
+### §27.3 How Agents Query the Catalog (Phase 2)
+
+At Step 5 of `/new-app` (architecture), before pattern selection:
+1. Read the catalog (already loaded in Step 1 — don't re-read)
+2. Filter entries where `trigger` matches: project domains, included modules, entity patterns, or project signals
+3. Surface ≤5 most relevant entries as a brief "Lessons from past projects" note in the architecture plan
+4. If an entry contradicts a planned choice, flag it explicitly before the human checkpoint
+
+Token rule: surfacing entries adds ~3–5 lines to the architecture plan. Do not quote the full entry — one-line title + brief implication is enough.
+
+### §27.4 How to Add Entries (the `/learn` skill)
+
+After a postmortem (§23.4) or at end of project (after Phase 6a):
+1. Agent reads the project's postmortems, architecture amendments, and self-review iterations
+2. Agent identifies 0–3 generalizable lessons (not every fix qualifies — apply §27.2 filter)
+3. Agent proposes YAML entries in `/learn` output
+4. **🔒 Human checkpoint** — human reviews and approves before any entry is written to `learnings/catalog.yaml`
+5. Approved entries are appended as a PR to the registry (not committed directly to main without review)
+
+### §27.5 Catalog Hygiene
+
+- Prune entries older than 18 months unless re-confirmed by a new incident
+- Merge duplicate entries (same root cause, different surface)
+- Cap catalog at 200 entries — if adding would exceed the cap, prune first
+- Do not add "reminder" entries that restate rules already in §20-§22 — the rulebook is the source of truth for patterns; the catalog is the source of truth for gotchas
+
+---
+
+## §28 Industry Standards Compliance [MVP]
+
+Industry-standard CI/CD practices should scale with the project — not forced onto every solo builder, but also not missing when enterprise customers arrive. §28 defines three **compliance postures** derived from project signals (§22.3).
+
+### §28.1 Compliance Postures
+
+**Posture: `solo`** — default when `team_size: 1` AND `scale: <100 users`
+
+The practices already in §24 (release) and §25 (security) are sufficient:
+- Conventional Commits + semver + CHANGELOG
+- gosec/semgrep + govulncheck/npm audit + gitleaks
+
+No additional overhead. A solo builder shipping a weekend tool gets zero ROI from enterprise compliance. Explicitly skipped: SBOM, container scanning, Dependabot, CODEOWNERS (there is one owner), PR templates (no PRs in solo workflow), coverage gates, branch protection.
+
+**Posture: `startup`** — default when `team_size: 2–10` OR `scale: public users` (and not enterprise signals)
+
+Everything in `solo`, plus:
+
+| Addition | Tool | Files generated |
+|----------|------|-----------------|
+| Dependency auto-updates | GitHub Dependabot | `.github/dependabot.yml` |
+| PR template | (static) | `.github/PULL_REQUEST_TEMPLATE.md` |
+| Container image scanning | Trivy | CI job in `ci.yaml` (HIGH/CRITICAL fails build) |
+| Code coverage gate | Codecov | CI job + `codecov.yml` (60% threshold) |
+| Branch protection | `gh` CLI script | `scripts/setup-branch-protection.sh` |
+
+**Posture: `enterprise`** — default when `regulatory: <any>` OR `user_type: B2B SaaS` OR `scale: enterprise`
+
+Everything in `startup`, plus:
+
+| Addition | Tool | Files generated |
+|----------|------|-----------------|
+| SBOM generation | syft (anchore/sbom-action) | `sbom.spdx.json` attached to release |
+| Container signing | cosign (keyless via OIDC) | CI step in deploy workflow |
+| License compliance | go-licenses / license-checker | CI job; fails on GPL/AGPL |
+| CODEOWNERS | (static) | `.github/CODEOWNERS` |
+| Issue templates | (static) | `.github/ISSUE_TEMPLATE/{bug,feature}.md` |
+| Stricter coverage gate | Codecov | `codecov.yml` (80% threshold) |
+| DORA metrics emission | (CI events) | `slo.yaml` extended with DORA fields in Phase 6a |
+
+**Always-deferred (regardless of posture)** — promote only via §21.6 when measured signal fires:
+- Reproducible builds (complex, rarely pays rent at MVP)
+- Full SLSA provenance attestation (overkill outside supply-chain-critical contexts)
+- Merge queues / custom review bots
+
+### §28.2 Posture Decision Rules (from §22.3 signals)
+
+| Project signals | Posture |
+|-----------------|---------|
+| `team_size: solo` AND `scale: <100 users` | `solo` |
+| `regulatory` field present, OR `user_type: B2B SaaS`, OR `scale: enterprise` | `enterprise` |
+| Anything else | `startup` |
+
+Agents propose the posture at Phase 2. User can override at the Phase 1 module-selection checkpoint (same mechanism as module tick selection).
+
+### §28.3 Posture Promotion (via §21.6 Evolution Protocol)
+
+Posture changes post-launch follow the same architecture amendment flow as pattern promotion:
+
+1. **Trigger** fires — e.g., first enterprise customer signed, team grew from 1→3, regulatory audit scheduled
+2. **Agent documents** the trigger as an `architecture_amendment.observation`
+3. **Agent proposes** posture upgrade (from `solo` → `startup`, or `startup` → `enterprise`) with the list of CI/CD additions it entails
+4. **🔒 Human approves**
+5. **Agent implements** — adds the new workflow jobs and template files via Phase 3 self-review protocol
+
+Posture can go up (never auto-downgrade — removing compliance tooling requires explicit human decision).
+
+### §28.4 Agent Instructions at Phase 2
+
+After capturing project signals (§22.3) and before pattern selection:
+```yaml
+compliance_posture:
+  selected: solo | startup | enterprise
+  reason: "<one-line — which signal drove the choice>"
+  additions:          # list of what will be generated beyond §24/§25 baseline
+    - ".github/dependabot.yml"
+    - ".github/PULL_REQUEST_TEMPLATE.md"
+    # ...
+  deferred:           # what's excluded and why
+    - "SBOM: deferred — no enterprise customers yet (promote when: first B2B contract signed)"
+```
+
+Present posture alongside the architecture plan at the Phase 2 human checkpoint. User can override any addition or deferral.
