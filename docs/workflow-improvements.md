@@ -211,3 +211,48 @@ Full E2E sequence (cheap → expensive):
 4. Design check (if Phase 2.5 ran): extract CSS variables, compare to ui-spec.yaml brand
 
 Output: compact `validation-report.yaml` with pass/fail per flow. Full logs to file, not chat.
+
+---
+
+## Phase 6 — Operate (Day-2 SDLC)
+
+### Why Phase 6 Was Added
+
+The original playbook covered the **build half** of SDLC well — requirements, design, implementation, testing, deploy. What it left out was the **operate half**: what happens after the first ship. Traditional SDLC covers this with ceremonies (sprints, retros, standups). Modkit replaces ceremony with **agent-runnable Day-2 protocols** that produce structured artifacts and only page a human when there's a real finding.
+
+**What we keep from traditional SDLC:** the substance — incident response, release management, security hygiene, data governance.
+
+**What we drop:** the ceremony — sprints, retros, standups, RACI matrices, status reports. These don't add value when an agent does the work.
+
+### Phase 6 Sub-phases
+
+| Sub-phase | When | What |
+|-----------|------|------|
+| 6a Instrument | Once after first deploy | Emit `slo.yaml`, `alerts.yaml`, `data-governance.yaml`, `threat-model.yaml`, `pii-inventory` |
+| 6b Iterate | On measured trigger | Evolution loop: observe signal → propose amendment → approve → implement |
+| 6c Maintain | Weekly | Dep scan, security scan, secret rotation check, monthly backup drill |
+
+### New Rulebook Sections
+
+| Section | Content |
+|---------|---------|
+| §23 Day-2 Operations | SLI/SLO definitions, alert design rules, runbook template, postmortem template (§23.4), lean oncall |
+| §24 Release Management | Conventional Commits, semver rules, rollback protocol (§24.3), canary via feature flags, release checklist |
+| §25 Security Lifecycle | CI scan suite (govulncheck/gosec/semgrep/gitleaks), secret rotation cadence, threat model template, quarterly review checklist |
+| §26 Data Governance | Retention table, GDPR export/delete endpoints, PII inventory, backup/restore drill |
+
+### New Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/operate` | Phase 6 entry point — detects which sub-phase to run, walks through 6a/6b/6c |
+| `/postmortem` | Guided blameless postmortem builder — severity classification, timeline, root cause, §21.6 amendment proposals |
+| `/release` | Pre-release checklist → semver bump → CHANGELOG (via git-cliff/changesets) → tag → deploy → verify |
+
+### Token Efficiency
+
+Phase 6 follows the same §18 token rules as the rest of the playbook:
+- operate-log.yaml entries are ~50 tokens (fixed schema, no narrative)
+- Phase 6c only pages a human if `action_required: true` — clean runs are silent
+- Phase 6a emits YAML artifacts, not prose explanations
+- `/postmortem` outputs ≤200 tokens for the YAML block + ≤100 for amendment proposals
