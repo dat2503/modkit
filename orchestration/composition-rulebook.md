@@ -1353,3 +1353,344 @@ If the agent finds itself implementing one of these from scratch → STOP and fi
 - Crypto primitives — ALWAYS use stdlib or an audited library; never roll your own
 
 **Self-audit**: scan own code at milestone end for these smells. If found, replace with a library before declaring the milestone complete.
+
+---
+
+## §23 Day-2 Operations [MVP]
+
+These rules govern how an agent manages a deployed application post-launch. They complement Phase 6 in the playbook — the playbook describes *when*, this section describes *how and to what standard*.
+
+### §23.1 SLI/SLO Definitions
+
+Every deployed application must have `slo.yaml` committed to the repo (generated in Phase 6a). Default targets — adjust by project signals (§22.3):
+
+| Signal | SLO target |
+|--------|-----------|
+| latency p95 | < 500ms (< 200ms for financial/B2B) |
+| error rate | < 1% (< 0.1% for payment flows) |
+| availability | > 99.5% (> 99.9% for paid B2B SaaS) |
+
+SLOs must be tied to user-facing behavior, not internal metrics. "Database query time" is not an SLO; "checkout endpoint latency p95" is.
+
+### §23.2 Alert Design Rules
+
+- Page **only** on user-impacting breaches sustained >5 minutes
+- Warn on budget burn (>50% of error budget consumed in 1h)
+- Do NOT alert on every individual error — Sentry handles error visibility; alerts fire on *rates*, not counts
+- Every alert must have a runbook reference in its description field
+- Alerts without runbooks are protocol violations
+
+### §23.3 Runbook Template
+
+One runbook per known failure mode. Stored in `runbooks/{module}/{symptom}.yaml`:
+
+```yaml
+symptom: "API returns 502 on /health"
+probable_causes:
+  - "Container failed to start (missing env var)"
+  - "Database connection refused"
+  - "Redis connection refused"
+diagnosis:
+  - "docker logs <container_name>"
+  - "curl -sf http://localhost:8080/health"
+  - "docker compose ps"
+mitigation:
+  - "Check .env for missing DATABASE_URL or REDIS_URL"
+  - "Restart: docker compose restart api"
+  - "If DB is down: docker compose up -d postgres"
+escalate_if: "Health check still failing after 10 minutes"
+owner: "on-call"
+```
+
+### §23.4 Postmortem Template
+
+After any user-impacting incident (sustained SLO breach, data loss, security event):
+
+```yaml
+incident_id: "INC-001"
+date: "2026-05-01"
+severity: P1 | P2 | P3
+duration_minutes: 0
+summary: ""
+timeline:
+  - time: "14:23"
+    event: "alert fired"
+  - time: "14:31"
+    event: "root cause identified"
+  - time: "14:45"
+    event: "mitigation deployed"
+root_cause: ""
+contributing_factors: []
+what_went_well: []
+action_items:
+  - description: ""
+    owner: ""
+    due_date: ""
+# Link to §21.6 if a pattern promotion is warranted:
+patterns_to_promote: []
+```
+
+Postmortems are blameless. Focus on systemic causes, not individual mistakes. Every incident that exceeds P2 severity must produce a postmortem within 48 hours.
+
+### §23.5 Lean Oncall
+
+- Solo dev: pager → mobile push notification via Sentry alerts
+- Small team: rotation schedule outside modkit scope; use PagerDuty or equivalent
+- Never expect the on-call person to investigate without a runbook — if a runbook doesn't exist, write it as part of the incident
+
+---
+
+## §24 Release Management [MVP]
+
+### §24.1 Conventional Commits (mandatory)
+
+All commits follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+feat: add invoice PDF download
+fix: correct Stripe webhook retry logic
+feat!: remove legacy /api/v0 routes   ← breaking change
+docs: update README deploy instructions
+chore: upgrade go to 1.23
+```
+
+This is the input to automated changelog generation. Non-conventional commits block the `/release` skill.
+
+### §24.2 Semantic Versioning Rules
+
+| Commit type | Version bump |
+|-------------|-------------|
+| `fix:` only | PATCH (1.0.X) |
+| `feat:` present | MINOR (1.X.0) |
+| `feat!:` or `BREAKING CHANGE:` footer | MAJOR (X.0.0) |
+
+Tools to use (§22 — don't reinvent):
+- Go projects: `git-cliff` for CHANGELOG generation
+- Bun/TS projects: `changesets` for monorepo versioning + CHANGELOG
+
+Never hand-write CHANGELOG entries — they must be generated from Conventional Commits.
+
+### §24.3 Rollback Protocol
+
+When a production deploy must be reverted:
+
+```bash
+# 1. Identify the last known-good tag
+git log --tags --oneline
+
+# 2. Redeploy the known-good image/commit
+# github-actions: re-run the deploy-production workflow for the previous tag
+# vercel: vercel rollback <deployment-url>
+# railway: railway rollback
+
+# 3. Verify health endpoint
+curl -sf https://api.yourapp.com/health
+
+# 4. Open a postmortem (§23.4)
+```
+
+Never patch production directly. Rollback → fix → redeploy is the only safe path.
+
+### §24.4 Canary / Feature-Flag Rollout
+
+When a feature needs gradual rollout (not all-or-nothing):
+
+1. Gate the feature behind a `feature-flags` module flag (see module AGENT.md)
+2. Deploy with flag at 0% for all users
+3. Promote: 5% → 20% → 50% → 100% with a verification step at each increment
+4. Verification: check SLO metrics (§23.1) hold for each cohort before expanding
+5. Rollback: set flag to 0% — no redeploy needed
+
+This replaces blue/green deployment for most MVP rollout needs at lower infrastructure cost.
+
+### §24.5 Release Checklist
+
+Before tagging a release:
+- [ ] All Phase 4 critical flows passing on staging
+- [ ] No open P1/P2 incidents
+- [ ] CHANGELOG generated and reviewed
+- [ ] Semver bump matches commit types (§24.2)
+- [ ] `slo.yaml` targets still achievable with new code (check staging metrics)
+- [ ] Secrets not about to expire (§25.3)
+
+---
+
+## §25 Security Lifecycle [MVP]
+
+### §25.1 CI Security Scans (mandatory additions to generated workflows)
+
+Add these jobs alongside build + test in CI. They must pass before merge to main.
+
+**Go projects:**
+```yaml
+- name: Dependency vulnerabilities
+  run: govulncheck ./...
+
+- name: Static analysis (security)
+  run: |
+    go install github.com/securego/gosec/v2/cmd/gosec@latest
+    gosec -fmt=json -out=sec-report.json ./...
+
+- name: Secret scanning
+  uses: gitleaks/gitleaks-action@v2
+```
+
+**Bun/TS projects:**
+```yaml
+- name: Dependency vulnerabilities
+  run: npm audit --audit-level=high
+
+- name: Static analysis (security)
+  run: npx semgrep --config=auto --error
+
+- name: Secret scanning
+  uses: gitleaks/gitleaks-action@v2
+```
+
+On any HIGH/CRITICAL finding → fail the build. MEDIUM findings → fail unless explicitly suppressed with a comment explaining why. LOW → log only.
+
+### §25.2 Dependency Scanning Cadence
+
+- On every PR (CI job above)
+- Weekly cron in Phase 6c (§Phase 6c — Maintain)
+- After any security disclosure affecting the runtime or a direct dependency
+
+### §25.3 Secret Rotation Cadence
+
+| Secret type | Rotation frequency | Trigger for immediate rotation |
+|-------------|-------------------|-------------------------------|
+| Clerk API keys | Quarterly | Team member departure; suspected exposure |
+| Stripe API keys | Quarterly | Same |
+| Stripe webhook secrets | Yearly | Suspected exposure |
+| Database credentials | Per-incident | Any team member departure |
+| Redis credentials | Per-incident | Any team member departure |
+| GitHub deploy keys | Yearly | Repository transfer or team change |
+| JWT signing keys | Yearly | Suspected exposure |
+
+Rotation procedure:
+1. Generate new secret in provider dashboard
+2. Update in CI/CD secrets store (GitHub Actions Secrets)
+3. Deploy — verify health endpoint immediately after
+4. Revoke old secret only after verified deployment
+5. Log rotation date + reason in `security-log.yaml`
+
+### §25.4 Threat Model Template (one per public surface, generated at Phase 2)
+
+Keep this short. One YAML block per API surface, updated when routes change:
+
+```yaml
+# threat-model.yaml — append one entry per public surface
+surfaces:
+  - route: "POST /api/v1/pay/:token"
+    threats:
+      - id: S1
+        category: STRIDE-Spoofing
+        description: "Attacker replays payment request with guessed token"
+        mitigation: "§20.1 idempotency keys + token is random UUID (128-bit entropy)"
+      - id: T1
+        category: STRIDE-Tampering
+        description: "Attacker modifies Stripe webhook payload"
+        mitigation: "§20.17 HMAC verification on all webhooks"
+    residual_risk: low
+    last_reviewed: "2026-05-01"
+```
+
+Review threat model at every architecture amendment. A route added without a threat model entry is a protocol violation at the §14 self-audit.
+
+### §25.5 Quarterly Security Review Checklist
+
+- [ ] All §25.1 CI scans passing on main
+- [ ] Secret rotation current (§25.3)
+- [ ] Threat model updated for any new routes since last review
+- [ ] Dependency CVE scan clean or findings triaged
+- [ ] Auth module: verify Clerk webhook secret still valid and not expired
+- [ ] Payments module: verify Stripe restricted-key permissions are minimal (read-only where possible)
+- [ ] Logs: confirm no PII is appearing in log output (spot check Sentry events)
+- [ ] Access: confirm only current team members have admin access to Clerk, Stripe, Sentry, CI/CD
+
+---
+
+## §26 Data Governance [MVP]
+
+### §26.1 Data Retention Table
+
+Every entity in the database must have a retention policy. Define this in `data-governance.yaml` at Phase 2 and commit it with the migrations:
+
+```yaml
+# data-governance.yaml
+retention:
+  users:
+    hot_days: -1          # keep indefinitely while account active
+    soft_delete_on: account_closure
+    hard_delete_after_days: 730  # 2 years after closure (GDPR)
+  invoices:
+    hot_days: -1          # financial records — keep indefinitely
+    archive_after_days: 1825  # 5 years (tax/legal requirement)
+    hard_delete: never
+  sessions:
+    hot_days: 30
+    hard_delete_after_days: 30
+  audit_logs:
+    hot_days: -1
+    archive_after_days: 365
+    hard_delete: never
+```
+
+Retention policies must be reviewed at the §25.5 quarterly security review.
+
+### §26.2 GDPR / Privacy Endpoints
+
+Required if `project_signals.regulatory` includes EU users or any data privacy regulation:
+
+| Endpoint | Method | Behavior |
+|----------|--------|---------|
+| `/api/me/export` | GET | Return all user data as JSON — must cover every table with `user_id` |
+| `/api/me/delete` | DELETE | Soft-delete account → schedule hard-delete per §26.1 retention table |
+
+These must be in the architecture plan if the project signal triggers them. They are NOT optional when EU users are in scope. Test them in Phase 4 critical flows.
+
+### §26.3 PII Inventory
+
+At Phase 2, the agent emits a PII inventory block alongside the schema:
+
+```yaml
+# pii-inventory — append to architecture-plan.yaml
+pii:
+  - entity: users
+    fields:
+      - name: email
+        category: contact
+        used_for: [auth, transactional_email]
+      - name: full_name
+        category: identity
+        used_for: [invoice_display]
+  - entity: invoices
+    fields:
+      - name: client_email
+        category: contact
+        used_for: [payment_notification]
+```
+
+Rules:
+- Never log PII fields (already enforced by §11, reinforced here)
+- Never include PII in error messages
+- PII fields must not appear in URL parameters (use IDs or opaque tokens)
+
+### §26.4 Backup and Restore
+
+**Backup configuration** (generated by cicd module for production deployments):
+- Postgres: automated daily snapshot (provided by Railway/managed Postgres/RDS — not custom)
+- Verify: `pg_dump` produces a non-empty file
+- Retention: keep 30 daily snapshots; 12 monthly snapshots
+
+**Restore drill (monthly, Phase 6c):**
+```bash
+# 1. Download latest snapshot
+# 2. Restore to staging database
+pg_restore -h staging-db -U postgres -d myapp_staging latest.dump
+# 3. Verify row counts approximate production
+# 4. Run smoke tests against restored staging
+# 5. Log: date, backup age at restore, row count match, smoke test result
+```
+
+Failing a restore drill means the backup is untrustworthy. Treat it as a P1 incident.
