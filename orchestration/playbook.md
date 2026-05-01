@@ -949,6 +949,171 @@ If a Tier-1 pattern is now obviously unnecessary:
 
 ---
 
+## Phase 6 — Operate [MVP]
+
+Phase 6 runs continuously after Phase 5 deploy. It is the agent-driven replacement for traditional Day-2 SDLC operations — no sprints, no standups, no ceremonies. Three agent-runnable sub-phases; human gates only on findings or escalations.
+
+**Entry point:** `/operate` skill. Loads Phase 6 context and walks through 6a → 6b → 6c.
+
+---
+
+### Phase 6a — Instrument (one-time after first deploy)
+
+**Goal:** Establish measurable targets before anything is in production long enough to regress.
+
+1. **Read project signals** from `project-brief.yaml` (scale, user type, regulatory — §22.3)
+2. **Emit `slo.yaml`** with default targets adjusted for project signals:
+
+```yaml
+# slo.yaml — generated once, committed to repo
+service: my-api
+slos:
+  latency:
+    target_p95_ms: 500        # tighten to 200 for financial or B2B
+    target_p99_ms: 1500
+  error_rate:
+    budget_percent: 1.0       # 99% success rate; tighten to 0.1% for payments
+  availability:
+    target_percent: 99.5      # 99.9% for paid B2B SaaS
+critical_flows:               # from key_flows in project-brief.yaml
+  - name: "checkout"
+    slo_overrides:
+      error_rate_budget_percent: 0.1
+      latency_target_p95_ms: 300
+```
+
+3. **Emit `alerts.yaml`** — alert rules derived from `slo.yaml`:
+   - Page on: SLO breach sustained >5 min, error spike >10× baseline, service down
+   - Warn on: SLO budget burn >50% in 1h, latency p95 creeping above 80% of target
+   - Do NOT alert on every error — page only on user-impacting events
+
+4. **Commit** `slo.yaml` and `alerts.yaml` to the repo root. These become the measured baseline for Phase 6b.
+
+**🔒 Human Checkpoint:** review `slo.yaml`. Tighten targets if needed for the actual product. Approve before Phase 6b begins.
+
+---
+
+### Phase 6b — Iterate (continuous post-launch loop)
+
+**Goal:** Evolve the product based on measured signals, not speculation. This is the replacement for sprint planning.
+
+This sub-phase formalizes §21.6 Evolution Protocol as a standing loop:
+
+**Trigger:** any of —
+- SLO breach (from `alerts.yaml`)
+- `patterns_deferred` entry reaches its `trigger_to_promote` threshold
+- User-reported bug or feature request (human brings the input)
+- Scheduled architecture review (agent runs this at 30/60/90-day intervals)
+
+**Agent actions:**
+1. Observe — collect the measured signal (metric value, incident count, user report)
+2. Document — one-line `architecture_amendment.observation` citing the signal
+3. Propose — emit architecture amendment YAML (§Architectural Feedback Loop) citing the §20 pattern to promote or the change needed
+4. **🔒 Human Checkpoint** — human reviews amendment; approves or redirects
+5. Implement — run the approved change through Phase 3 milestones (with self-review protocol)
+6. Update `patterns_applied` / `patterns_deferred` + re-run Phase 4 critical flows
+
+**Output per iteration:**
+```yaml
+# append to .modkit/runs/{run_id}/operate-log.yaml
+cycle: iterate
+date: 2026-05-01
+trigger: "SLO breach: latency p95 = 820ms sustained 15min"
+amendment: "promote §20.7 read-replica pattern"
+status: approved
+tokens_used: 18000
+```
+
+---
+
+### Phase 6c — Maintain (weekly agent cadence)
+
+**Goal:** Keep the system healthy without human attention unless there is a finding.
+
+The agent runs this weekly (or on-demand via `/operate`). Human is notified only if a finding requires action.
+
+**Step 6c.1 — Dependency scan**
+```bash
+# Go
+govulncheck ./...
+# Bun/TS
+npm audit --audit-level=high
+```
+- On CVE found: propose a patch PR (do not auto-merge)
+- On no findings: log "clean" in operate-log.yaml and continue
+
+**Step 6c.2 — Security scan**
+```bash
+# Go
+gosec ./... -fmt=json -out=sec-report.json
+gitleaks detect --report-path=secrets-report.json
+# Bun/TS
+npx semgrep --config=auto --json > sec-report.json
+gitleaks detect --report-path=secrets-report.json
+```
+- On findings: classify severity; HIGH → escalate immediately; MEDIUM → include in weekly report; LOW → log only
+
+**Step 6c.3 — Secret rotation check**
+
+Review secret ages per the §25 cadence table:
+- Clerk/Stripe keys: rotate if >90 days since last rotation
+- DB credentials: rotate if any team member has left since last rotation
+- Webhook secrets: rotate if >365 days
+- If rotation needed: generate new secret, update env vars in CI/CD secrets store, verify health endpoint after rotation
+
+**Step 6c.4 — Backup/restore drill (monthly, not weekly)**
+
+```bash
+# Restore latest backup to staging DB
+# Verify: row counts match production ± 5%
+# Record: drill date, backup age, row count match
+```
+If drill fails → escalate immediately. Never skip the drill; untested backups are not backups.
+
+**Output (compact YAML, posted to chat, full logs to file):**
+```yaml
+# operate-log.yaml entry
+cycle: maintain
+date: 2026-05-08
+dep_scan: clean
+security_scan: 1 medium finding (path: apps/api/handlers/upload.go — use html.EscapeString)
+secret_rotation: clerk keys due in 12 days
+backup_drill: skipped (not monthly cadence this week)
+action_required: true
+tokens_used: 8000
+```
+
+**Abort conditions (same as Phase 3 guardrails):** if a scan tool errors out (not just "no findings"), STOP and escalate — don't proceed with partial results.
+
+---
+
+### Phase 6 — Operate Log Schema
+
+Every Phase 6 sub-phase appends one entry to `.modkit/runs/{run_id}/operate-log.yaml`:
+
+```yaml
+- cycle: instrument | iterate | maintain
+  date: ISO-8601
+  phase: "6a" | "6b" | "6c"
+  # 6a fields
+  slo_yaml_committed: true
+  # 6b fields
+  trigger: ""
+  amendment: ""
+  status: proposed | approved | rejected | implemented
+  # 6c fields
+  dep_scan: clean | N-findings
+  security_scan: clean | N-findings
+  secret_rotation: clean | due-in-N-days | rotated
+  backup_drill: pass | fail | skipped
+  action_required: true | false
+  tokens_used: 0
+```
+
+**Token rule:** operate-log entries replace verbose chat narration. Post the YAML entry to chat, no recap paragraphs.
+
+---
+
 ## Future Phases (Deferred)
 
 These are not part of the MVP workflow. Plan and implement separately:
