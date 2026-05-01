@@ -43,6 +43,128 @@ At every 🔒 checkpoint, the agent must present its output and wait. The follow
 
 ---
 
+## Agent Self-Review Protocol
+
+Before declaring **any milestone complete** (3a, 3b, 3c, 3d, Phase 4), the agent must run the full verification sequence. This is mandatory — never declare a milestone done without it.
+
+### Verification Sequence (cheap → expensive)
+
+1. **Build** — exit code only; parse output only on failure
+2. **Test** — pass/fail count only; full output only on failure
+3. **Wiring** — `modkit validate --output json`; parse JSON, not text
+4. **Smoke** — milestone-specific HTTP checks via curl (status codes only — see table below)
+5. **Self-audit** — re-read own diff (not whole files) against the approved architecture plan and `ui-spec.yaml` if Phase 2.5 ran
+
+### Self-Improvement Loop
+
+If any step fails:
+1. Diagnose the root cause from the error output
+2. Apply a targeted fix
+3. Re-run the full sequence from step 1
+
+**Iteration limits:**
+- **Same-error retry**: max 3. "Same error" = identical first 100 chars of error message OR same file:line + same error type.
+- **Different-error progress**: max 6 (each iteration diagnoses a new cause — real progress).
+- **Same-fix-same-error**: STOP immediately — do not count, do not retry.
+- **Circular A→B→A**: STOP after detecting the cycle once.
+
+After exhausting limits — emit a ≤200-token failure report (what failed, last 3 attempts, current diagnosis) and wait for human guidance. Never self-resume.
+
+### Smoke Tests per Milestone
+
+| Milestone | Required checks |
+|-----------|----------------|
+| 3a | `curl -sf http://localhost:8080/health` → 200 |
+| 3b | `make migrate` exits 0; one SELECT confirms a table exists |
+| 3c | build passes; `/health` 200; auth route returns 401 unauthenticated |
+| 3d | frontend 200 at `/`; sign-in renders; protected route redirects; UI matches `ui-spec.yaml` layout |
+| Phase 4 | full critical-flow run (see Phase 4 section) |
+
+### Cross-Milestone Regression
+
+At the **start** of each milestone, re-run only the *previous* milestone's smoke tests. If any regress, STOP — do not build on a broken foundation.
+
+### Self-Review Telemetry
+
+Every milestone produces one entry in `.modkit/runs/{run_id}/self-review.log`:
+
+```yaml
+milestone: 3c
+started: 2026-05-01T14:23Z
+ended: 2026-05-01T14:41Z
+iterations: 2
+checks: {build: pass, test: "12/12 pass", validate: pass, smoke: "pass 4/4", audit: pass}
+fixes: ["iter1: added missing CORS middleware in bootstrap.go"]
+guardrails_triggered: []
+tokens_used: 52000
+```
+
+Post this YAML block to chat at milestone end. No recap paragraphs — the log IS the narration.
+
+### Git Checkpoint (on passing milestone)
+
+```bash
+git add -A
+git commit -m "milestone:{3a|3b|3c|3d|phase4} — {one-line description}"
+git tag milestone/{name}/$(date +%Y%m%d-%H%M)
+```
+
+On **failure** (after exhausting retries): do NOT commit. Show `git status` + `git diff --stat` to the human. Human chooses: discard, keep dirty, or accept partial. Never auto-restore without confirmation.
+
+---
+
+## Agent Guardrails & Loop Control
+
+Hard limits that apply to every phase. Agents must respect these even if the user says "keep trying."
+
+### Hard Limits
+
+| Limit | Value | Action on breach |
+|-------|-------|-----------------|
+| Same-error retries per milestone | 3 | Escalate to human |
+| Different-error retries per milestone | 6 | Escalate to human |
+| File writes per Phase 3 sub-phase | 50 | Stop, present progress |
+| Consecutive tool failures | 5 | Stop |
+| Phase 3 wall time | 90 min | Stop, summarize state |
+| Token budget (see table below) | per phase | Warn at 80%, stop at 100% |
+
+### Token Budgets (soft limits — agent self-monitors)
+
+| Phase | Budget | Rationale |
+|-------|--------|-----------|
+| 0 Intake | 15k | Read brief, write YAML |
+| 1 Modules | 10k | Read registry, decide |
+| 2 Architecture | 30k | Read rulebook §3,§4,§9,§10, generate plan |
+| 2.5 Design | 20k | Load assets, write ui-spec |
+| 3a Scaffold | 10k | Run modkit init + verify |
+| 3b Database | 20k | Write migrations, verify |
+| 3c API | 80k | Handlers + tests (largest phase) |
+| 3d Frontend | 60k | Pages + components |
+| 4 Validate | 25k | E2E run + report |
+| 5 Deploy | 15k | CI/CD setup |
+| **Total target** | **285k** | Stop and ask if exceeded |
+
+### Abort Conditions (immediate stop, no retry)
+
+- Build tool exits with code outside [0, 1]
+- Migration applied partially then failed
+- Any DROP / DELETE not in the approved architecture plan
+- `modkit validate` returns a parse error
+
+### Escalation Protocol
+
+1. Stop all work immediately
+2. Emit structured failure report (≤200 tokens)
+3. Wait for explicit human instruction
+4. Never self-resume after a guardrail trigger without human confirmation
+
+### Loop Detection
+
+- **Same-fix-same-error**: if iteration N applies the same fix as N-1 and gets the same error → STOP immediately
+- **Circular dependency**: fixing A causes B; fixing B causes A → STOP after detecting the cycle
+
+---
+
 ## Before You Start
 
 Load the following context before any phase:
@@ -206,8 +328,8 @@ skipped_modules:
 
 | Module | Include when |
 |--------|-------------|
-| `observability` | **Always** — non-negotiable |
-| `error-tracking` | **Always** — non-negotiable |
+| `observability` | Production or hosted app — skip for prototypes |
+| `error-tracking` | Any app going to production — skip for prototypes |
 | `auth` | Any app with user accounts |
 | `payments` | Any app with paid transactions |
 | `email` | Transactional emails needed |
@@ -219,9 +341,26 @@ skipped_modules:
 | `feature-flags` | Phased rollout or A/B testing mentioned |
 | `cicd` | Always — generated by `modkit init` |
 
+### Toolchain Inventory (end of Phase 1)
+
+After finalizing module selection, emit `toolchain.yaml` alongside the selection table. This document drives reuse decisions in Phase 3 (see composition-rulebook.md §22).
+
+```yaml
+toolchain:
+  modules: [auth/clerk, payments/stripe, email/resend, cache/redis, jobs/asynq]
+  mcp_tools_available:
+    - playwright: "Phase 4 critical-flow browser tests"
+    - canva: "Phase 2.5 design import (if provided)"
+    - github: "Phase 5 CI workflow + PR creation"
+  runtime_libraries:
+    - go-chi: "router (template default)"
+    - sqlc: "DB code gen"
+  external_services: [clerk, stripe, resend]
+```
+
 ### 🔒 Human Checkpoint — Module Review
 
-Present the selection with rationale. Wait for human to:
+Present the selection with rationale **and** `toolchain.yaml`. Wait for human to:
 - Approve the selection
 - Add or remove modules
 - Change implementation choices
@@ -348,16 +487,170 @@ frontend_pages:
     description: Public payment page for clients
 ```
 
+### Project-Fit Signals (before pattern selection)
+
+Capture the project's context — this modulates which patterns apply at what tier (§21):
+
+```yaml
+project_signals:
+  scale_estimate: "<1000 users at launch, <10k records per tenant"
+  team_size: "solo developer"
+  longevity: "intended for 1+ year operation"
+  user_type: "small business freelancers"
+  regulatory: "PCI via Stripe — we never touch raw card data"
+```
+
+A signal of "10 users / prototype" pushes most patterns to Tier-2 deferred. A signal of "regulated SaaS" keeps more at Tier-0/Tier-1.
+
+### Pattern Selection (final step of Phase 2)
+
+After producing schema/routes/wiring/pages, and after capturing project signals, produce the `patterns_applied` block. Apply the §21 tier filter first:
+
+1. **Tier-0 (always):** §20.1 (payment/webhook only), §20.10, §20.13, §20.17, §20.18, §20.20
+2. **Tier-1 (direct trigger only):** apply if a concrete trigger exists in the brief
+3. **Tier-2 (deferred):** list in `patterns_deferred` with the measured signal that would later promote them
+
+For every Tier-1 candidate, run the **Reverse-YAGNI test:** *"If we removed this pattern today, what specifically breaks today?"* If the answer is "nothing today, but maybe later" → defer it.
+
+Pattern budget: ≤8 from §20 excluding Tier-0. Going over requires an explicit justification per pattern.
+
+```yaml
+patterns_applied:
+  - id: §20.1
+    name: "Idempotency keys"
+    tier: 0
+    reason: "POST /pay/:token can double-charge if retried"
+    impl_note: "idempotency_keys table; Idempotency-Key header on /pay/:token"
+  - id: §20.2
+    name: "Outbox pattern"
+    tier: 1
+    reason: "Stripe webhook + email must not be lost on DB-commit-then-crash"
+    impl_note: "outbox table written in same transaction; jobs worker drains"
+  - id: §20.13
+    name: "SELECT FOR UPDATE"
+    tier: 0
+    reason: "race condition on invoice.status during payment webhook"
+    impl_note: "lock invoice row in payment handler"
+  - id: §20.17
+    name: "Webhook signature verification"
+    tier: 0
+    reason: "Stripe webhook is a public endpoint"
+    impl_note: "verify Stripe-Signature header before any processing"
+  - id: §20.18
+    name: "Timeouts"
+    tier: 0
+    reason: "all external calls (Stripe, Resend, S3)"
+    impl_note: "5s default HTTP timeout; no naked context.Background() in handlers"
+  - id: §20.20
+    name: "N+1 prevention"
+    tier: 0
+    reason: "GET /invoices loads items per row"
+    impl_note: "JOIN or batch-load items by invoice_id IN (...)"
+
+patterns_deferred:
+  - id: §20.5
+    name: "Circuit breaker"
+    trigger_to_promote: "≥2 production outages caused by external service in 30 days"
+  - id: §20.7
+    name: "Read replicas"
+    trigger_to_promote: "DB read CPU >70% sustained for 1 week"
+  - id: §20.9
+    name: "Queue backpressure"
+    trigger_to_promote: "Job queue depth >5000 sustained for 1 hour"
+
+mvp_profile_overrides: []
+# Any deviation from §21.3 lean defaults goes here with a reason
+# e.g. "search: Elasticsearch instead of ILIKE — brief specifies full-text relevance ranking"
+
+deviations: []
+# Deliberate departures from §19/§20 defaults due to project fit (§22.4)
+# e.g. {rule: §20.8, decision: "skip cursor pagination", reason: "max 50 invoices per freelancer"}
+
+principles_noted:
+  - "§19.4 handler → service → repo — no shortcuts"
+  - "§19.6 timeouts everywhere; no naked context.Background()"
+```
+
+**Rule:** the approved `patterns_applied` block becomes mandatory for Phase 3. The self-audit checklist (§14) verifies each one was implemented.
+
 ### 🔒 Human Checkpoint — Architecture Approval
 
-**This is the most critical checkpoint.** Present the full architecture plan.
+**This is the most critical checkpoint.** Present the full architecture plan **including** project signals, `patterns_applied`, and `patterns_deferred`.
 
 Wait for human to:
 - Approve the database schema
 - Adjust routes or pages
+- Review and confirm the pattern selection
 - Explicit **"approved, proceed to build"**
 
 **Do not write a single line of application code until this is approved.** Changes at this stage are cheap. Changes after code is written are expensive.
+
+---
+
+## Phase 2.5 — Design Analysis [MVP when designs provided]
+
+**Goal:** Extract a UI specification from provided design assets before writing any frontend code. Agents build to match the design — not a generic scaffold.
+
+### When to run
+
+Run Phase 2.5 when the user provides **any** of:
+- Canva URL or design ID
+- Excalidraw checkpoint or diagram
+- Figma URL
+- Screenshot or image file
+- Written design brief (colors, fonts, layout)
+- Reference website URL
+- Component library preference (shadcn, MUI, Ant Design, etc.)
+- Brand style guide
+- Accessibility requirements
+- Mobile/responsive specifications
+
+**Skip Phase 2.5** if none of the above are provided — continue to Phase 3 with generic scaffold styles.
+
+### Agent Actions
+
+1. **Load assets using the cheapest source first** — text brief > Excalidraw checkpoint > Canva get-design > image read. Never load all sources when one suffices.
+2. **Produce `ui-spec.yaml`:**
+   ```yaml
+   design_source: "canva://DAB123xyz"
+   brand:
+     primary_color: "#1A73E8"
+     secondary_color: "#F8F9FA"
+     font_family: "Inter, sans-serif"
+     border_radius: "8px"
+   layout:
+     nav: "top fixed"
+     sidebar: "left 240px collapsible"
+     content_max_width: "1200px"
+   component_library: "shadcn/ui"
+   accessibility: "WCAG 2.1 AA"
+   responsive: "mobile-first, breakpoints at 640px/1024px/1280px"
+   pages:
+     - route: /dashboard
+       components: [StatCard, InvoiceTable, QuickActions]
+       layout: "3-column grid top, full-width table below"
+     - route: /invoices/new
+       components: [InvoiceForm, LineItemEditor, PreviewPanel]
+       layout: "two-pane: form left, preview right"
+   components:
+     - name: StatCard
+       props: [label, value, trend, color]
+       style: "white card, rounded-lg, subtle shadow"
+     - name: InvoiceTable
+       props: [invoices, onRowClick, onStatusFilter]
+       style: "striped rows, sticky header, status badge"
+   interactions:
+     - "Table rows clickable → navigate to invoice detail"
+     - "Status badge: draft=gray, sent=blue, paid=green, overdue=red"
+   ```
+3. **Map design components to architecture plan pages.** Flag pages in the architecture that have no corresponding design coverage.
+4. **Token rule:** `ui-spec.yaml` is the ONLY design artifact carried into Phase 3d. Do not re-load original design files in later phases.
+
+### 🔒 Human Checkpoint — Design Confirmation
+
+Present `ui-spec.yaml`. Ask: "Does this match what you intended? Any missing components or interactions?"
+
+Wait for confirmation before proceeding to Phase 3. Skip this checkpoint if no design assets were provided.
 
 ---
 
@@ -481,10 +774,42 @@ For each page in the architecture plan. Use server components for initial data, 
 
 After each handler is written:
 ```bash
-modkit validate --output json
+go build ./...              # must pass before writing next handler
+modkit validate --output json  # fix violations immediately
 ```
 
-Fix any validation failures before continuing. Never accumulate validation failures.
+Before writing custom code for any capability, run the §22.1 reuse check (see composition-rulebook.md §22). Emit a `reuse_check` block if custom code is required — absence is a protocol violation.
+
+### 🔒 Optional Checkpoint — API Review (between 3c and 3d)
+
+Pause here and present the API state to the human **only if any** of:
+- Self-improvement loop was triggered during 3c
+- An architecture amendment was applied during 3c
+- API surface has >10 routes
+- Human pre-requested a sync point
+
+Otherwise continue silently to Phase 3d.
+
+### When the Architecture Plan is Wrong (Architectural Feedback Loop)
+
+If during Phase 3 the agent discovers the approved architecture is incorrect (missing route, wrong schema, impossible wiring):
+
+1. **STOP coding immediately**
+2. Produce a compact YAML diff — not a full re-plan:
+   ```yaml
+   architecture_amendment:
+     reason: "discovered during 3c"
+     additions:
+       api_routes: [{method: POST, path: /api/v1/invoices/duplicate, auth: freelancer}]
+     removals: []
+     changes:
+       - "database.invoices.public_token: add UNIQUE constraint — needed for /pay/:token lookup"
+   ```
+3. Present the amendment to the human (~100 tokens)
+4. On approval: update `architecture-plan.yaml`, continue Phase 3 from where it stopped
+5. On rejection: revert any related code, ask for direction
+
+**Rule:** never silently work around an architecture defect. Either amend with approval or stop.
 
 ### Escalation
 
@@ -498,57 +823,64 @@ If you encounter a decision not covered by the architecture plan:
 
 ## Phase 4 — Validate [MVP]
 
-**Goal:** Verify the application builds, tests pass, and critical flows work.
+**Goal:** Verify the app is genuinely up and running end to end — not just that pieces compile.
 
-### Agent Actions
+### Agent Actions (cheap → expensive)
 
+**1. Static checks (cheap)**
 ```bash
-# 1. Check module wiring
+make build              # exit 0 required
+make test               # all pass required
 modkit validate --output json
-
-# 2. Check overall health
 modkit doctor --output json
-
-# 3. Build
-make build
-
-# 4. Run tests
-make test
-
-# 5. Start local services
-docker-compose up -d
-sleep 5  # wait for services
-
-# 6. Smoke test
-curl -sf http://localhost:8080/health || echo "FAIL: health check"
 ```
 
-### Output Format
+**2. Service start (medium)**
+```bash
+docker-compose up -d    # poll healthchecks — do not sleep blindly
+make migrate            # exit 0 required
+make dev-api &
+make dev-web &
+```
+
+**3. Critical-flow walk (expensive — run last)**
+
+For each `key_flow` in `project-brief.yaml`, execute the full flow:
+- API steps via curl (check status codes + response shape)
+- Frontend steps via Playwright MCP (navigate, fill, submit, assert)
+- Record: PASS or FAIL with the specific step that failed
+
+**4. Design verification (only if Phase 2.5 ran)**
+- Use Playwright MCP to load 2–3 key pages
+- Extract computed CSS variables (`--primary-color`, `font-family`) from the DOM
+- Compare to `ui-spec.yaml` brand section
+- Full visual screenshot diff: only on human request (expensive)
+
+### Output Format (compact — failures only get detail)
 
 ```yaml
-# validation-report.yaml — generated during Phase 4
-validation:
-  modkit_validate: pass
-  modkit_doctor: pass
-  build: pass
-  test_results:
-    total: 47
-    passed: 47
-    failed: 0
-    coverage: 74%
-  smoke_tests:
-    - test: "GET /health"
-      status: 200
-      result: pass
-    - test: "POST /api/v1/invoices (auth required)"
-      status: 401
-      result: pass
-issues: []
+# validation-report.yaml — keep terse; full logs go to file
+build: pass
+test: "47/47 pass, coverage 74%"
+wiring: pass
+services: "postgres up, redis up, api :8080, web :3000"
+flows:
+  - name: "freelancer creates invoice"
+    result: pass
+    steps: 5
+  - name: "client pays invoice"
+    result: fail
+    failed_step: 3
+    error: "Stripe webhook returned 500 — signature mismatch"
+design_check: "primary_color match: pass; font_family match: pass"
+issues: 1
 ```
+
+Full logs → `.modkit/runs/{run_id}/phase4.log`. Not in chat.
 
 ### 🔒 Human Checkpoint — Validation Review
 
-Present the validation report. Ask the human to:
+Present `validation-report.yaml`. Ask the human to:
 1. Pull the repo locally
 2. Run `make dev`
 3. Test the critical flows manually
@@ -596,6 +928,24 @@ git push origin v1.0.0
 ### 🔒 Human Checkpoint — Production Confirmation
 
 Confirm the production deploy succeeded. Monitor error tracking for 15 minutes post-deploy.
+
+---
+
+## Post-Launch: Promoting Deferred Patterns
+
+When a Tier-2 pattern's trigger fires post-launch (see composition-rulebook.md §21.6):
+
+1. **Observe** — a measured signal (latency p95, error rate, queue depth, outage count) crosses the threshold noted in `patterns_deferred`
+2. **Document** — write the observation as `architecture_amendment.observation` (one line)
+3. **Propose** — produce the amendment citing the §20 pattern to promote
+4. **Approve** — human reviews; a real trigger justifies the work
+5. **Implement** — move the entry from `patterns_deferred` to `patterns_applied`
+
+If a Tier-1 pattern is now obviously unnecessary:
+1. Note it in an amendment with `removal_reason`
+2. Plan removal as a backward-compatible change (§20.10) if already deployed
+
+**Rule:** patterns are pulled by evidence, never pushed by speculation.
 
 ---
 
