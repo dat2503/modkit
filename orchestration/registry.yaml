@@ -63,15 +63,16 @@ frontends:
 
 modules:
 
-  # ── ALWAYS INCLUDED ────────────────────
+  # ── OPTIONAL INFRASTRUCTURE ────────────
 
   - name: observability
     category: observability
     phase: mvp
-    always_include: true
+    always_include: false
     description: >
       Distributed tracing, structured logging, and metrics via OpenTelemetry.
-      Wraps all module calls and HTTP handlers. Must be initialized first.
+      Wraps all module calls and HTTP handlers. When included, must be initialized first.
+      Optional — skip for prototypes or early-stage projects; add later with modkit pull observability.
     interface_go: contracts/go/observability.go
     interface_ts: contracts/ts/observability.ts
     config_schema: modules/observability/config.schema.json
@@ -449,7 +450,21 @@ modules:
         runtimes:
           go: modules/cicd/impl/github-actions-go
           bun: modules/cicd/impl/github-actions-ts
-        notes: "Default. Generates .github/workflows/ directory."
+        notes: "Default. Generates .github/workflows/ with CI, staging deploy, and production deploy. Uses Docker + self-managed infra."
+
+      - name: vercel
+        label: "Vercel"
+        runtimes:
+          go: modules/cicd/impl/vercel-go
+          bun: modules/cicd/impl/vercel-ts
+        notes: "vercel.json + Vercel CLI deploy via GitHub Actions. Best for Bun/Next.js. Requires VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID."
+
+      - name: railway
+        label: "Railway"
+        runtimes:
+          go: modules/cicd/impl/railway-go
+          bun: modules/cicd/impl/railway-ts
+        notes: "railway.toml + Railway CLI deploy via GitHub Actions. Railway provisions Postgres and Redis automatically. Requires RAILWAY_TOKEN."
 
 # ─────────────────────────────────────────
 # COMPOSITION RULES

@@ -102,14 +102,12 @@ Full detail in `orchestration/playbook.md`. Never skip phases. Always stop at �
 
 ## 5. Module Selection Guide
 
-### Always included (no decision needed)
-- **observability** — OpenTelemetry. Always first in init order.
-- **error-tracking** — Sentry. Always second in init order.
-
 ### Decision rules for optional modules
 
 | Module | Include when | Skip when | Requires |
 |--------|-------------|-----------|---------|
+| **observability** | Production app, hosted deployment, need tracing/metrics | Prototype or local-only project | — |
+| **error-tracking** | Any app going to production | Local/prototype only | — |
 | **auth** | App has user accounts, any route needs auth | Public-only API | cache |
 | **cache** | auth included, jobs included, sessions, rate limiting | Stateless API with no auth/jobs | — |
 | **payments** | App processes money, subscriptions, one-time purchases | Free tool, no monetization | — |
@@ -124,8 +122,8 @@ Full detail in `orchestration/playbook.md`. Never skip phases. Always stop at �
 ### Initialization order (mandatory)
 
 ```
-1. observability   ← always first
-2. error-tracking  ← always second
+1. observability   ← first, if included
+2. error-tracking  ← second, if included
 3. cache           ← before auth and jobs
 4. auth            ← after cache
 5. payments        ← any order
