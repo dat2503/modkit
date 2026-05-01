@@ -47,9 +47,11 @@ For the task tracker, we'll use:
 - **cache** — required by auth (and good for sessions)
 - **email** — send task assignment notifications
 - **jobs** — send emails asynchronously
+- **observability** — tracing and structured logs (include for production; skip for quick prototypes)
+- **error-tracking** — Sentry error capture (same rule)
 - **cicd** — generate GitHub Actions workflows
 
-`observability` and `error-tracking` are always included automatically.
+`observability` and `error-tracking` are optional — include them when you're building for production. The agent will ask about them during module selection.
 
 To learn what a module does before choosing it:
 
@@ -118,7 +120,7 @@ A few things to notice:
 
 **`bootstrap/bootstrap.go`** initializes all modules in the required order:
 ```
-observability → error-tracking → cache → auth → email → jobs
+observability (if included) → error-tracking (if included) → cache → auth → email → jobs
 ```
 This order is enforced — swap it and things will break at runtime.
 
@@ -249,18 +251,23 @@ The `api` client uses `VITE_API_URL` (set to `http://localhost:8080` by default)
 
 ## Add a Module After Init
 
-Suppose you decide the task tracker needs payments (Pro tier). Pull it in:
+Suppose you decide the task tracker needs payments (Pro tier). Use the `/configure` skill in Claude Code:
+
+```
+/configure
+```
+
+The agent shows your current module state, presents available additions, validates dependency chains, performs an impact analysis, and wires everything in — including running `modkit validate` at the end. You can also do it manually:
 
 ```bash
 modkit pull payments
 ```
 
-This copies the Stripe implementation files into your project and updates `.modkit.yaml`. Then:
-
+Then:
 1. Add `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` to `.env`
 2. Wire Stripe in `bootstrap/bootstrap.go` (modkit prints instructions after pull)
 3. Add `payments contracts.PaymentsService` to the `Deps` struct in `router.go`
-4. Validate everything: `modkit validate`
+4. Validate: `modkit validate`
 
 ---
 
@@ -317,4 +324,10 @@ modkit pull realtime     # add it
 ```
 
 **Deploy:**
-The `cicd` module generates `.github/workflows/` with CI, staging deploy, and production deploy pipelines. Push to GitHub and configure the required secrets in your repo settings.
+The `cicd` module generates `.github/workflows/` with CI, staging deploy, and production deploy pipelines. Push to GitHub and configure the required secrets in your repo settings. The compliance posture chosen at scaffold time (solo/startup/enterprise) determines what extra files are generated alongside the workflows — Dependabot, PR templates, Trivy scanning, and more.
+
+**Operate after launch:**
+Once deployed, run `/operate` in Claude Code to set up SLOs (`slo.yaml`), enable weekly maintenance checks (dependency scan, security scan, secret rotation check), and get structured incident response via `/postmortem` and release management via `/release`.
+
+**Learn from past projects:**
+Run `/learn` after any significant incident or at end of the project to propose additions to the cross-project `learnings/catalog.yaml` — giving future agents a head start on known pitfalls.

@@ -28,6 +28,8 @@ module-registry/
 | [`orchestration/composition-rulebook.md`](orchestration/composition-rulebook.md) | Agents | All wiring rules with Go + TypeScript examples |
 | [`docs/module-registry-spec.md`](docs/module-registry-spec.md) | Contributors | How to add a new module to the registry |
 | [`docs/modkit-cli-spec.md`](docs/modkit-cli-spec.md) | Contributors | Full modkit CLI specification |
+| [`docs/workflow-improvements.md`](docs/workflow-improvements.md) | All | All workflow additions explained — self-review, guardrails, Phase 6, learning loop, compliance postures |
+| [`learnings/catalog.yaml`](learnings/catalog.yaml) | Agents | Cross-project lessons catalog — loaded at `/new-app` start, populated via `/learn` |
 
 ---
 
@@ -63,20 +65,22 @@ modkit validate --output json
 
 ## Available Modules
 
-| Module | Category | Phase | Default Impl |
-|--------|----------|-------|--------------|
-| `observability` | observability | mvp | otel |
-| `error-tracking` | error-tracking | mvp | sentry |
-| `auth` | auth | mvp | clerk |
-| `payments` | payments | mvp | stripe |
-| `email` | notification | mvp | resend |
-| `storage` | storage | mvp | s3 |
-| `cache` | cache | mvp | redis |
-| `jobs` | jobs | mvp | asynq (Go) / bullmq (Bun) |
-| `realtime` | realtime | v2 | websocket |
-| `search` | search | v2 | elasticsearch |
-| `feature-flags` | feature-flags | v2 | flagsmith |
-| `cicd` | cicd | mvp | github-actions |
+| Module | Category | Phase | Default Impl | Selection |
+|--------|----------|-------|--------------|-----------|
+| `observability` | observability | mvp | otel | Optional — include for production, skip for prototypes |
+| `error-tracking` | error-tracking | mvp | sentry | Optional — include for production, skip for prototypes |
+| `auth` | auth | mvp | clerk | Include when app has user accounts |
+| `payments` | payments | mvp | stripe | Include when app processes money |
+| `email` | notification | mvp | resend | Include when app sends transactional email |
+| `storage` | storage | mvp | s3 | Include when app stores user files |
+| `cache` | cache | mvp | redis | Required by auth and jobs |
+| `jobs` | jobs | mvp | asynq (Go) / bullmq (Bun) | Include for background processing |
+| `realtime` | realtime | v2 | websocket | Include only when <1s live updates are required |
+| `search` | search | v2 | elasticsearch | Include when full-text search or >1k rows needed |
+| `feature-flags` | feature-flags | v2 | flagsmith | Include for phased rollouts / A/B testing |
+| `cicd` | cicd | mvp | github-actions | Always generated; also supports vercel, railway |
+
+Module selection is user-driven — when using `/new-app`, the agent presents the full menu and asks for explicit yes/no per module. You can add or remove modules from an existing project with `/configure`.
 
 ---
 
@@ -93,14 +97,30 @@ All projects share a Next.js frontend (`apps/web/`). The `--runtime` flag select
 
 ## Agent Workflow
 
-Agents follow the 6-phase playbook in `orchestration/playbook.md`:
+Agents follow the 7-phase playbook in `orchestration/playbook.md`. Entry point: `/new-app` Claude Code skill.
 
-1. **Phase 0 — Intake**: Parse project idea → structured brief
-2. **Phase 1 — Module Selection**: Select modules from registry
-3. **Phase 2 — Architecture Plan**: DB schema, routes, wiring plan
-4. **Phase 3 — Scaffold & Wire**: `modkit init` + write handlers, migrations, tests
-5. **Phase 4 — Validate**: `modkit validate` + build + tests
-6. **Phase 5 — Deploy**: CI/CD → staging → production
+| Phase | Name | Human gate |
+|-------|------|-----------|
+| 0 | Intake — structured brief from user idea | ✅ required |
+| 1 | Module selection + compliance posture | ✅ required |
+| 2 | Architecture plan (schema, routes, patterns, §21/§22) | ✅ required |
+| 2.5 | Design analysis — `ui-spec.yaml` from Canva/Figma/image | ✅ if design provided |
+| 3 | Scaffold + implement (milestones 3a–3d with self-review) | optional after 3c |
+| 4 | Validate — E2E with docker-compose + Playwright | ✅ required |
+| 5 | Deploy — staging gate → production | ✅ required |
+| 6 | Operate — SLOs, evolution loop, weekly maintenance | agent-driven; human on findings |
+
+**Agent skills** (Claude Code slash commands):
+
+| Skill | Purpose |
+|-------|---------|
+| `/new-app` | Start a new project — full Phase 0–6 workflow |
+| `/operate` | Run Phase 6 (6a instrument, 6b iterate, 6c maintain) |
+| `/postmortem` | Guided blameless postmortem → architecture amendment |
+| `/release` | Semver bump + CHANGELOG + tag + deploy |
+| `/learn` | Extract lessons from postmortems → catalog proposals |
+| `/configure` | Add or remove modules from an existing project |
+| `/update-modkit` | Sync local registry cache via git pull |
 
 ---
 
