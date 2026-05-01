@@ -11,6 +11,7 @@ Load these files **ONCE per session** — do not re-read them in later steps (§
 2. `~/.modkit/cache/orchestration/playbook.md`
 3. `~/.modkit/cache/orchestration/composition-rulebook.md`
 4. `~/.modkit/cache/orchestration/registry.yaml`
+5. `~/.modkit/cache/learnings/catalog.yaml` (cross-project lessons — §27)
 
 Load module `AGENT.md` only for selected modules (after Phase 1 approval), not the full catalog.
 
@@ -39,26 +40,46 @@ Present the brief and **wait for approval** before continuing.
 
 ## Step 3 — Module selection (Phase 1)
 
-Based on the brief, select modules from the registry:
-- Apply the §21.3 lean defaults — observability and error-tracking are optional (skip for prototypes)
-- For each candidate module, read its AGENT.md: `~/.modkit/cache/modules/{name}/docs/AGENT.md`
-- Present a table:
+Present the **full module menu** from registry.yaml — every available module, one row per module. This is an explicit user choice, not an agent decision. Format:
 
-| Module | Include? | Rationale |
-|--------|----------|-----------|
-| observability | production app? yes / prototype? skip | Adds tracing overhead |
-| ... | | |
+| Module | Default | Description | Trigger / When to include |
+|--------|---------|-------------|--------------------------|
+| observability | prototype? skip / production? ✓ | OpenTelemetry tracing + structured logs | Any app going to production |
+| error-tracking | prototype? skip / production? ✓ | Sentry error capture | Any app going to production |
+| auth | ✓ if app has user accounts | User auth (Clerk) | Any route that needs a logged-in user |
+| cache | ✓ if auth included | Redis session/cache | Required by auth and jobs |
+| payments | ○ optional | Stripe payments | App processes money |
+| email | ○ optional | Resend transactional email | App sends emails |
+| storage | ○ optional | S3 file uploads | App stores user-uploaded files |
+| jobs | ○ optional | Asynq background jobs | Async processing needed |
+| search | ○ optional | Full-text search | Search >1000 rows OR relevance ranking |
+| feature-flags | ○ optional | Phased rollouts / A/B testing | Multiple user cohorts |
+| realtime | ○ optional | WebSocket connections | Sub-1s live updates required |
+| cicd | ✓ always | CI/CD workflows | Always generated |
 
-After finalizing selection, emit `toolchain.yaml` (§22.5):
+Then ask the user:
+> "Which modules would you like? You can say 'use your defaults', approve/reject individual ones, or tell me more about your needs and I'll suggest."
+
+Honor every explicit yes/no. If the user picks a module that requires a dependency not yet included, auto-include it and explain why. After the user responds, read `AGENT.md` only for selected modules.
+
+Also determine **compliance posture** from project signals (§28.2):
+- `solo` (team of 1, <100 users) → CI baseline only
+- `startup` (small team or public users) → adds Dependabot, PR template, Trivy, coverage gate
+- `enterprise` (regulated, B2B SaaS, or enterprise customers) → full suite
+
+Present the posture alongside the module table and let the user override.
+
+After finalizing, emit `toolchain.yaml` (§22.5):
 ```yaml
 toolchain:
   modules: [auth/clerk, payments/stripe, ...]
   mcp_tools_available: [playwright, canva, github]
   runtime_libraries: [go-chi, sqlc, ...]
   external_services: [clerk, stripe, ...]
+compliance_posture: solo | startup | enterprise
 ```
 
-Present the module selection table **and** `toolchain.yaml`. **Wait for approval** before continuing.
+Present the module table, posture, and `toolchain.yaml`. **Wait for approval** before continuing.
 
 ## Step 4 — Scaffold (Phase 3)
 
@@ -85,17 +106,19 @@ Design the application architecture:
 3. **Frontend pages** — table with route and description
 4. **Module wiring** — bootstrap init order
 
-Then apply the §21 + §22 layer:
+Then apply the §21 + §22 + §27 + §28 layer:
 
 5. **Capture project signals** (§22.3): scale estimate, team size, longevity, user type, regulatory context
-6. **Pattern Selection** (§20 + §21 tier filter):
+6. **Scan learnings catalog** (§27.3): filter `learnings/catalog.yaml` by project domains + modules; surface ≤5 most relevant entries as "Heads up from past projects" — one line each, flag any that contradict a planned choice
+7. **Pattern Selection** (§20 + §21 tier filter):
    - Tier-0: apply automatically (§20.1 payment/webhook, §20.10, §20.13, §20.17, §20.18, §20.20)
    - Tier-1: apply only if a concrete trigger exists in the brief — run the Reverse-YAGNI test
    - Tier-2: list in `patterns_deferred` with the measured trigger to promote them
    - Pattern budget: ≤8 from §20 excluding Tier-0
-7. **Emit** `patterns_applied`, `patterns_deferred`, `mvp_profile_overrides`, `deviations`
+8. **Compliance posture additions** (§28.4): emit `compliance_posture` block listing what CI/CD artifacts will be generated beyond the §24/§25 baseline; confirm it matches the posture chosen in Step 3
+9. **Emit** `patterns_applied`, `patterns_deferred`, `mvp_profile_overrides`, `deviations`, `compliance_posture`
 
-Apply §21.5 forbidden list and §21.7 boring-stack principle. Reference composition-rulebook.md §19–§22 by ID — do not paraphrase.
+Apply §21.5 forbidden list and §21.7 boring-stack principle. Reference composition-rulebook.md §19–§28 by ID — do not paraphrase.
 
 Present the full architecture plan (schema + routes + pages + wiring + patterns) and **wait for approval**.
 
