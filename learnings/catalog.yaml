@@ -1,0 +1,90 @@
+# learnings/catalog.yaml
+#
+# Cross-project lessons-learned catalog. Registry-level — agents read this at Phase 2
+# to surface relevant past insights before designing a new project.
+#
+# Schema per entry:
+#   id:          unique slug (e.g. auth-001)
+#   category:    bug | anti-pattern | integration-gotcha | performance | security | reuse-opportunity
+#   domains:     list of domains/modules this lesson applies to (e.g. [auth, payments])
+#   title:       one-line summary (≤80 chars)
+#   lesson:      what to do (or not do), generalized — no project-specific names
+#   trigger:     project signal or condition that makes this lesson relevant
+#   source:      postmortem ID, amendment ID, or "manual" if hand-curated
+#   date_added:  ISO-8601
+#
+# How to add entries:
+#   Run /learn after a postmortem or at end of project. Agent proposes 0–3 generalized entries.
+#   Human approves before writing. See composition-rulebook.md §27.
+#
+# How agents use this:
+#   Loaded once at /new-app Step 1 (§18 load-once rule).
+#   At Step 5 (architecture), agent scans for entries matching project signals + modules.
+#   Surfaces ≤5 most relevant entries as a "Heads up from past projects" note.
+
+entries:
+
+  - id: auth-001
+    category: integration-gotcha
+    domains: [auth, cache]
+    title: "Clerk webhook secret must come from the endpoint config, not the API key"
+    lesson: >
+      When wiring Clerk webhooks, the CLERK_WEBHOOK_SECRET must match the secret shown on
+      the specific webhook endpoint in the Clerk dashboard — not the API secret key. These are
+      different values. Mixing them causes 401 on every webhook delivery with no clear error
+      message from Clerk's SDK.
+    trigger: "auth module included AND key_flows contains a webhook or post-signup step"
+    source: manual
+    date_added: "2026-05-01"
+
+  - id: db-001
+    category: bug
+    domains: [database]
+    title: "Soft-delete queries must always include WHERE deleted_at IS NULL"
+    lesson: >
+      Every list query on a soft-deleted table must filter WHERE deleted_at IS NULL.
+      It is easy to write the initial query correctly and then add a JOIN or subquery later
+      that omits the filter. The self-audit step should scan every SELECT on tables with
+      a deleted_at column for this condition.
+    trigger: "entities include any soft-deletable resource (notes, invoices, users)"
+    source: manual
+    date_added: "2026-05-01"
+
+  - id: payments-001
+    category: integration-gotcha
+    domains: [payments]
+    title: "Stripe test and live keys are not interchangeable — prefix matters"
+    lesson: >
+      STRIPE_SECRET_KEY starting with sk_test_ only works against Stripe's test environment.
+      A key mismatch (test key + live webhook or vice versa) produces cryptic 401s.
+      Verify the key prefix matches the environment at startup — fail fast with a clear error
+      rather than surfacing it at payment time.
+    trigger: "payments module included"
+    source: manual
+    date_added: "2026-05-01"
+
+  - id: migrations-001
+    category: anti-pattern
+    domains: [database]
+    title: "Never rename a column in a single migration on a live system"
+    lesson: >
+      Renaming a column in one migration causes downtime: the old column disappears before
+      the new code ships. The safe path: (1) add new column, (2) backfill it, (3) deploy code
+      reading the new column, (4) drop old column in a follow-up migration.
+      Per §20.10 backward-compatible migrations.
+    trigger: "any migration that changes a column name on a table with existing data"
+    source: manual
+    date_added: "2026-05-01"
+
+  - id: jobs-001
+    category: anti-pattern
+    domains: [jobs]
+    title: "Background jobs must be idempotent — queues guarantee at-least-once delivery"
+    lesson: >
+      Every background job that mutates state must check whether the work is already done
+      before doing it. Queues deliver at-least-once, not exactly-once. A job that emails a
+      receipt or charges a card without an idempotency check will double-fire on retry.
+      Per §20.1 + §20.3.
+    trigger: "jobs module included"
+    source: manual
+    date_added: "2026-05-01"
