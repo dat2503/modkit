@@ -256,3 +256,61 @@ Phase 6 follows the same §18 token rules as the rest of the playbook:
 - Phase 6c only pages a human if `action_required: true` — clean runs are silent
 - Phase 6a emits YAML artifacts, not prose explanations
 - `/postmortem` outputs ≤200 tokens for the YAML block + ≤100 for amendment proposals
+
+---
+
+## Cross-Project Learning Loop (§27)
+
+### Why Added
+
+Per-project artifacts (self-review.log, postmortems, patterns_deferred) capture lessons but they never leave the project. Every new project started from zero. Mistakes from project A didn't inform agents on project B.
+
+### What Was Added
+
+**`learnings/catalog.yaml`** — a registry-level cross-project lessons store. Each entry: id, category (bug/anti-pattern/integration-gotcha/etc.), domains, title, lesson text, trigger condition, source, date.
+
+**`/learn` skill** — run after a postmortem or at end of project. Agent extracts 0–3 generalizable lessons, applies §27.2 qualification filter (would it change a Phase 2 decision? is it non-obvious? is it generalizable?), checks for catalog duplicates, proposes entries. Human approval required before any write.
+
+**`/new-app` updates** — catalog loaded in Step 1 (load-once, §18). At Step 5 architecture, agent scans catalog for ≤5 relevant entries and surfaces them as "Heads up from past projects" before pattern selection.
+
+**§27 in composition-rulebook.md** — entry schema, qualification rules, query protocol, hygiene (18-month prune, 200-entry cap, no-rulebook-duplication rule).
+
+---
+
+## CI/CD Compliance Postures (§28)
+
+### Why Added
+
+Forcing enterprise CI/CD practices onto every project is over-engineering — a solo builder doesn't need SBOM + cosign + CODEOWNERS. But those practices matter when the project grows. §28 scales CI/CD with the project, using the same evidence-driven logic as §21's pattern tiers.
+
+### Three Postures
+
+| Posture | Auto-selected when | Additions beyond §24/§25 baseline |
+|---------|-------------------|----------------------------------|
+| `solo` | team=1 AND <100 users | None — baseline SAST/SCA/secrets is sufficient |
+| `startup` | small team OR public users | Dependabot, PR template, Trivy scan, Codecov 60%, branch protection script |
+| `enterprise` | regulated OR B2B SaaS OR enterprise customers | Everything in startup + SBOM (syft), container signing (cosign), license compliance, CODEOWNERS, issue templates, Codecov 80% |
+
+Posture is auto-suggested from §22.3 project signals at Phase 2 and confirmed at the Phase 1 checkpoint. User can override. Promotes via §21.6 evolution protocol — trigger observed, amendment proposed, human approves.
+
+### What Was Added
+
+- **`modules/cicd/templates/startup/`** — dependabot.yml, PULL_REQUEST_TEMPLATE.md, codecov.yml (60%), setup-branch-protection.sh
+- **`modules/cicd/templates/enterprise/`** — CODEOWNERS, bug_report.md, feature_request.md, codecov.yml (80%)
+- **`modules/cicd/docs/AGENT.md`** — Compliance Posture section documenting what CI job additions each posture generates (Trivy/codecov for startup; SBOM/cosign/license for enterprise)
+- **Contracts updated** — `CompliancePosture` field in `CICDConfig` (Go + TS)
+- **Config schema updated** — `COMPLIANCE_POSTURE` enum added
+
+---
+
+## User-Driven Module Selection
+
+### Why Added
+
+Previously the agent picked modules and presented a table for approval. The user wanted explicit agency — "tick what you want."
+
+### What Changed
+
+**`/new-app` Step 3** now presents the full module menu (all available modules, with descriptions and trigger conditions) and explicitly asks the user for yes/no per module. Compliance posture is selected alongside. Agent honors every explicit choice; auto-includes required dependencies and explains why.
+
+**`/configure` skill** — new. For post-scaffold module changes on an existing project. Shows current state, validates dependency chains, performs impact analysis for removals (scanning usages in code), presents change plan with human approval gate, implements with self-review protocol per module, and re-evaluates posture on completion.
