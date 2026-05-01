@@ -2,95 +2,127 @@
 
 ## When to use
 
-This module is automatically included by `modkit init` for every project. You do not select it — it is always generated.
+This module is automatically included by `modkit init` for every project. You do not select it separately — it is always generated. You select the *implementation* using `--modules cicd:<impl>`.
 
-The module generates three GitHub Actions workflows into `.github/workflows/`:
+## Choosing an implementation
+
+| Implementation | Best for | Infra model | Secrets needed |
+|---------------|---------|------------|---------------|
+| `github-actions` (default) | Self-hosted or Docker-based deploys | Docker + your own servers | `DOCKER_REGISTRY_TOKEN`, `STAGING_DEPLOY_KEY`, `PRODUCTION_DEPLOY_KEY` |
+| `vercel` | Bun/Next.js frontends, serverless Go | Managed (Vercel platform) | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` |
+| `railway` | Full-stack with managed Postgres + Redis | Managed (Railway platform) | `RAILWAY_TOKEN` |
+
+If the user does not specify, default to `github-actions`.
+
+---
+
+## github-actions
+
+Generates three GitHub Actions workflows into `.github/workflows/`:
+
 1. `ci.yaml` — builds, tests, and lints on every PR
 2. `deploy-staging.yaml` — deploys to staging on merge to `main`
 3. `deploy-production.yaml` — deploys to production on version tag `v*`
 
-## What gets generated
+**CI steps (Go):** checkout → setup-go → `go build ./...` → `go test ./...` → golangci-lint
+**CI steps (Bun):** checkout → setup-bun → `bun install` → `bun build` → `bun test` → eslint
 
-### `ci.yaml`
-
-Runs on: `push` to any branch, `pull_request` to `main`
-
-Steps (Go runtime):
-1. `actions/checkout`
-2. `actions/setup-go` with version from `registry.yaml`
-3. `go build ./...`
-4. `go test ./...`
-5. `golangci-lint run`
-
-Steps (Bun runtime):
-1. `actions/checkout`
-2. `oven-sh/setup-bun` with version from `registry.yaml`
-3. `bun install`
-4. `bun build`
-5. `bun test`
-6. `bunx eslint . --ext .ts`
-
-### `deploy-staging.yaml`
-
-Runs on: `push` to `main`
-
-Steps:
-1. Build Docker image and push to `DOCKER_REGISTRY`
-2. Deploy to staging environment (SSH deploy or container registry update)
-3. Run smoke tests against staging URL
-4. Notify on failure
-
-### `deploy-production.yaml`
-
-Runs on: `push` tag matching `v*`
-
-Steps:
-1. Build and push production Docker image (tagged with git tag)
-2. Deploy to production environment
-3. Create GitHub Release with changelog
-4. Notify on success/failure
-
-## Required GitHub secrets
-
-These must be set in GitHub → Settings → Secrets and variables → Actions:
-
+**Required GitHub secrets:**
 ```
-DOCKER_REGISTRY_TOKEN    # container registry authentication
+DOCKER_REGISTRY_TOKEN    # container registry auth
 STAGING_DEPLOY_KEY       # SSH key or deploy token for staging
 PRODUCTION_DEPLOY_KEY    # SSH key or deploy token for production
 STAGING_URL              # base URL for smoke tests
 ```
 
-## Deploy to staging workflow (Phase 5 of playbook)
-
+**Deploy to staging:**
 ```bash
-# Triggers automatically on push to main
-git push origin main
-# Watch: GitHub Actions → deploy-staging.yaml
+git push origin main    # triggers deploy-staging.yaml automatically
 ```
 
-## Deploy to production (Phase 5 of playbook)
-
+**Deploy to production:**
 ```bash
-# Only after staging is approved:
 git tag v1.0.0
-git push origin v1.0.0
-# Watch: GitHub Actions → deploy-production.yaml
+git push origin v1.0.0  # triggers deploy-production.yaml
 ```
+
+---
+
+## vercel
+
+Generates:
+- `vercel.json` — build and route config
+- `.github/workflows/ci.yaml` — build + test on every PR
+- `.github/workflows/deploy-production.yaml` — Vercel CLI deploy on push to `main`
+
+No staging workflow — Vercel automatically creates preview deployments for every PR.
+
+**Required GitHub secrets:**
+```
+VERCEL_TOKEN        # Vercel personal access token
+VERCEL_ORG_ID       # from `vercel whoami` or dashboard
+VERCEL_PROJECT_ID   # from .vercel/project.json after first `vercel link`
+```
+
+**One-time setup:**
+```bash
+cd apps/web
+npx vercel link     # links project, writes .vercel/project.json
+# commit .vercel/project.json — it contains VERCEL_ORG_ID and VERCEL_PROJECT_ID
+```
+
+**Deploy:**
+```bash
+git push origin main    # triggers deploy-production.yaml automatically
+```
+
+**Note for Go runtime:** uses `@vercel/go` builder. API routes must be in `apps/api/*.go` and conform to Vercel's Go serverless function signature.
+
+---
+
+## railway
+
+Generates:
+- `railway.toml` — service config (healthcheck path, restart policy, build settings)
+- `.github/workflows/ci.yaml` — build + test on every PR
+- `.github/workflows/deploy-production.yaml` — Railway CLI deploy on push to `main`
+
+**Required GitHub secrets:**
+```
+RAILWAY_TOKEN    # from Railway dashboard → Account Settings → Tokens
+```
+
+**One-time setup (Railway dashboard):**
+1. Create a new project in Railway
+2. Add a Postgres service (Railway provisions it automatically)
+3. Add a Redis service (Railway provisions it automatically)
+4. Link your GitHub repo to the Railway service
+5. Copy the service environment variables (`DATABASE_URL`, `REDIS_URL`) — Railway injects them automatically at runtime
+
+**Deploy:**
+```bash
+git push origin main    # triggers deploy-production.yaml automatically
+```
+
+**Note:** Railway injects `DATABASE_URL` and `REDIS_URL` at runtime from linked services. Do not set these manually in `.env` for Railway deploys.
+
+---
 
 ## Integration spec
 
-After wiring, verify with:
+After scaffold, verify with:
 
-1. Push the scaffolded project to a GitHub repository
-2. Create a branch and open a pull request — the `ci.yaml` workflow should trigger automatically
-3. Verify the CI workflow runs: build, test, and lint steps should all pass on the scaffold's default code
-4. Merge the PR to `main` — the `deploy-staging.yaml` workflow should trigger (it will fail without secrets configured, but it should trigger)
-5. Confirm the workflow files exist at `.github/workflows/ci.yaml`, `deploy-staging.yaml`, and `deploy-production.yaml`
+1. Push the project to a GitHub repository
+2. Open a PR — the `ci.yaml` workflow should trigger and pass on the scaffold's default code
+3. Merge to `main` — the deploy workflow should trigger (may fail without secrets configured, but must trigger)
+4. Confirm generated files exist:
+   - `github-actions`: `.github/workflows/{ci,deploy-staging,deploy-production}.yaml`
+   - `vercel`: `vercel.json` + `.github/workflows/{ci,deploy-production}.yaml`
+   - `railway`: `railway.toml` + `.github/workflows/{ci,deploy-production}.yaml`
 
 ## Do NOT
 
-- Deploy to production without a staging approval
-- Store deployment credentials in `.env` — use GitHub Actions secrets
-- Skip the CI workflow on PRs — never merge with failing tests
-- Manually edit generated workflow files — regenerate via `modkit` if changes needed
+- Deploy to production without staging approval (`github-actions` impl)
+- Store deployment credentials in `.env` — use GitHub Actions secrets for all of them
+- Skip CI on PRs — never merge with failing tests
+- Manually edit generated workflow files — regenerate via `modkit` if changes are needed

@@ -1,6 +1,6 @@
 name: "cicd"
 version: "1.0.0"
-description: "CI/CD pipeline configuration. Generates GitHub Actions workflows for build, test, lint, staging deploy, and production deploy. Generated automatically by 'modkit init'."
+description: "CI/CD pipeline configuration. Generates deployment config and GitHub Actions workflows for build, test, and deploy. Supports GitHub Actions (Docker), Vercel, and Railway. Generated automatically by 'modkit init'."
 category: "cicd"
 phase: "mvp"
 always_include: false
@@ -27,4 +27,20 @@ implementations:
     runtimes:
       go: "modules/cicd/impl/github-actions-go"
       bun: "modules/cicd/impl/github-actions-ts"
-    notes: "Default. Generates .github/workflows/ directory with CI, staging deploy, and production deploy workflows."
+    notes: "Default. Generates .github/workflows/ with CI, staging deploy, and production deploy. Uses Docker + self-managed infra."
+
+  - name: vercel
+    label: "Vercel"
+    phase: mvp
+    runtimes:
+      go: "modules/cicd/impl/vercel-go"
+      bun: "modules/cicd/impl/vercel-ts"
+    notes: "Generates vercel.json + GitHub Actions CI + Vercel CLI production deploy on push to main. Best for Bun/Next.js frontends. Requires VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID as GitHub secrets."
+
+  - name: railway
+    label: "Railway"
+    phase: mvp
+    runtimes:
+      go: "modules/cicd/impl/railway-go"
+      bun: "modules/cicd/impl/railway-ts"
+    notes: "Generates railway.toml + GitHub Actions CI + Railway CLI deploy on push to main. Railway provisions Postgres and Redis automatically via dashboard. Requires RAILWAY_TOKEN as a GitHub secret."

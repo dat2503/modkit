@@ -35,6 +35,18 @@ export interface CICDConfig {
 
   /** Deployment environments (e.g. ["staging", "production"]). */
   deployEnvs?: string[];
+
+  /** Deployment platform: "github-actions" | "vercel" | "railway". Defaults to "github-actions". */
+  deployTarget?: 'github-actions' | 'vercel' | 'railway';
+
+  /** Vercel organization ID (vercel impl only). */
+  vercelOrgId?: string;
+
+  /** Vercel project ID (vercel impl only). */
+  vercelProjectId?: string;
+
+  /** Railway project ID (railway impl only). */
+  railwayProjectId?: string;
 }
 
 /** Result of validateWorkflows. */

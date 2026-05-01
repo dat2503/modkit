@@ -4,10 +4,22 @@
   "properties": {
     "CICD_PROVIDER": {
       "type": "string",
-      "enum": ["github-actions"],
-      "description": "CI/CD provider to use"
+      "enum": ["github-actions", "vercel", "railway"],
+      "description": "CI/CD and deployment provider to use"
+    },
+    "VERCEL_ORG_ID": {
+      "type": "string",
+      "description": "Vercel organization ID (vercel impl only). Store as a GitHub Actions secret."
+    },
+    "VERCEL_PROJECT_ID": {
+      "type": "string",
+      "description": "Vercel project ID (vercel impl only). Store as a GitHub Actions secret."
+    },
+    "RAILWAY_PROJECT_ID": {
+      "type": "string",
+      "description": "Railway project ID (railway impl only). Store as a GitHub Actions secret."
     }
   },
   "required": ["CICD_PROVIDER"],
-  "notes": "Workflow files are generated at project scaffold time. All secrets (deploy keys, registry credentials) are stored as GitHub Actions secrets, not in .env."
+  "notes": "Config files (vercel.json, railway.toml) and workflow files are generated at project scaffold time. All secrets are stored as GitHub Actions secrets, not in .env."
 }

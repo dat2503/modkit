@@ -33,6 +33,19 @@ type CICDConfig struct {
 
 	// DeployEnvs lists the deployment environments (e.g. ["staging", "production"]).
 	DeployEnvs []string
+
+	// DeployTarget identifies the deployment platform ("github-actions", "vercel", "railway").
+	// Defaults to "github-actions" if empty.
+	DeployTarget string
+
+	// VercelOrgID is the Vercel organization ID (vercel impl only).
+	VercelOrgID string
+
+	// VercelProjectID is the Vercel project ID (vercel impl only).
+	VercelProjectID string
+
+	// RailwayProjectID is the Railway project ID (railway impl only).
+	RailwayProjectID string
 }
 
 // CICDValidationResult is the result of ValidateWorkflows.
