@@ -944,3 +944,412 @@ All four must pass. No exceptions.
 - Production deploys require manual approval gate
 - Keep CI fast: target < 3 minutes for the full PR pipeline
 - Docker images must be tagged with the git SHA, not just `latest`
+
+---
+
+## §14 Agent Verification Loop (addition to Testing Strategy) [MVP]
+
+**Per-handler (agent-only, no human):**
+```bash
+go build ./...              # must pass before writing the next handler
+modkit validate --output json  # fix wiring violations immediately
+```
+
+**Per-milestone (full self-review):**
+Run the full 5-step Agent Self-Review Protocol (see Playbook). All steps must pass before declaring a milestone complete. Self-improvement loop: up to 3 same-error / 6 different-error iterations, then escalate.
+
+**Self-audit checklist (before any human checkpoint):**
+- [ ] All routes in `openapi.yaml` have a corresponding handler
+- [ ] All handlers use `writeError()` / `c.json({error:...})` for error responses
+- [ ] Bootstrap init order matches `module_wiring_order` from architecture plan
+- [ ] No hardcoded env vars — all config via injected struct
+- [ ] Tests written for all new handlers (unit) and critical flows (integration)
+- [ ] `modkit validate` shows 0 errors
+- [ ] Every pattern listed in `patterns_applied` is implemented
+- [ ] No N+1 queries in list handlers (§20.20)
+- [ ] Every external call has a timeout (§20.18)
+- [ ] Every inbound webhook verifies signature (§20.17)
+- [ ] Every retryable POST supports idempotency keys (§20.1)
+- [ ] Migrations are backward-compatible within a release (§20.10)
+- [ ] If `ui-spec.yaml` exists: frontend components match design spec (colors, layout, names)
+- [ ] No §22.6 "don't reinvent" smells in custom code
+
+**Rule:** presenting a milestone to the human with known failures is a protocol violation. Fix first, then present.
+
+---
+
+## §17 Guardrails & Loop Control [MVP]
+
+See Playbook §Agent Guardrails & Loop Control for the full rules.
+
+**Hard limits summary:**
+- Max 3 same-error retries per milestone → escalate
+- Max 6 different-error retries per milestone → escalate
+- Max 50 file writes per Phase 3 sub-phase → stop, present progress
+- Max 5 consecutive tool failures → stop
+- Phase 3 wall time 90 min → stop, summarize
+- Token budgets: warn at 80%, hard stop at 100% (see Playbook for per-phase budgets)
+
+**Abort conditions (no retry):** build exit outside [0,1], partial migration failure, DROP/DELETE not in approved plan, `modkit validate` parse error.
+
+**Escalation:** stop → emit ≤200-token failure report → wait for human → never self-resume.
+
+**Agents must respect hard limits even if the user says "keep trying."**
+
+---
+
+## §18 Token Efficiency [MVP]
+
+Minimize token usage at every step. Every rule below saves tokens — follow them.
+
+**Loading rules:**
+- Load `playbook.md`, `composition-rulebook.md`, `registry.yaml` ONCE per session — never re-read unless the file has been written to
+- Load module `AGENT.md` only for selected modules (after Phase 1 approval), not the full catalog
+- Load `ui-spec.yaml` once at Phase 3d start — do not re-read original design files
+
+**Output rules:**
+- Default to YAML/JSON for all structured artifacts — 5–10× shorter than prose
+- Diff-style edits, not full file rewrites for small changes
+- Status reports use fixed schemas (see §Self-Review Telemetry in Playbook) — no recap paragraphs
+- Architecture amendments are YAML diffs, not full re-plans
+
+**Verification ordering (always cheap → expensive):**
+- Exit codes > HTTP status codes > parsed JSON > log scanning > screenshots > visual diffs
+- Stop at first failure — do not gather full state when one signal is enough
+
+**Reference by ID, never paraphrase:**
+- Write `see §20.1` not "the idempotency key pattern where the client supplies a header and the server caches the response for 24 hours..."
+- Write `see Playbook §Self-Review Protocol` not a re-explanation of the 5 steps
+
+**Rule:** when two approaches are equivalent, pick the one that emits fewer tokens.
+
+---
+
+## §19 Engineering Principles [MVP]
+
+These principles are mandatory defaults. Deliberate deviation requires an explicit note in `deviations:` (see §22.4).
+
+### §19.1 SOLID
+- **Single Responsibility**: one handler does one thing; services own one aggregate
+- **Open/Closed**: extend via interface implementations (enforced by §1 Interface-First)
+- **Liskov Substitution**: any module impl must pass the contract test (§14)
+- **Interface Segregation**: small contracts; do not bundle unrelated methods
+- **Dependency Inversion**: depend on contracts, never on concrete implementations (§1)
+
+### §19.2 DRY (Don't Repeat Yourself)
+- Repeated logic → extract to a service or helper after the 3rd occurrence
+- Repeated wiring → put in bootstrap, not in handlers
+
+### §19.3 YAGNI (You Aren't Gonna Need It)
+- Do not add fields, routes, or modules not in the approved architecture plan
+- Do not add abstractions until a 2nd concrete use exists
+- Speculative configurability is a smell
+
+### §19.4 Separation of Concerns
+- Layer boundary: **handler → service → repository → DB**
+- Handlers never call DB directly; repositories never know about HTTP
+- Modules never reach across into each other's internals — only via contracts
+
+### §19.5 Twelve-Factor App
+- Config via env vars, never hardcoded (enforced by §13)
+- Stateless processes (state in DB, cache, or object store)
+- Logs to stdout — never to files (infra collects them)
+- Disposability: graceful shutdown on SIGTERM
+- Dev/prod parity: same Postgres/Redis versions in compose and production
+
+### §19.6 Coding Principles
+- **Fail fast**: validate at system boundaries; reject malformed input with 400
+- **Errors as values**: Go returns `error`; TypeScript returns typed Result — never panic in handlers
+- **Pure where possible**: services accept inputs, return outputs; side effects at the edges
+- **Composition over inheritance**: both Go and TypeScript favor composition
+- **Small functions**: if a function exceeds ~50 lines or 3 levels of nesting, split it
+
+**Application rule:** the self-audit checklist checks these at every milestone.
+
+---
+
+## §20 Data-Intensive Application Patterns [MVP]
+
+Reference: Kleppmann, *Designing Data-Intensive Applications*. Each pattern has a **trigger** — apply it only when the trigger is met. Cite the §20.X ID in the architecture plan's `patterns_applied` block. Select patterns using the §21 tier filter.
+
+### Reliability
+
+#### §20.1 Idempotency Keys (DDIA Ch.8, Ch.11)
+- **Trigger**: any POST that mutates state and could be retried (payments, webhooks, job enqueue)
+- **Pattern**: client supplies `Idempotency-Key` header → server stores (key, response) for 24h → repeat request returns cached response
+- **Implementation**: `idempotency_keys` table with PK on (key, route); unique constraint
+
+#### §20.2 Outbox Pattern (DDIA Ch.11)
+- **Trigger**: must reliably notify external systems after a DB write (webhook, email, downstream)
+- **Pattern**: write event row to `outbox` table in the same DB transaction → background worker reads outbox → emits event → marks delivered
+- **Why**: avoids dual-write (DB committed but notification lost)
+
+#### §20.3 At-Least-Once Job Delivery (DDIA Ch.11)
+- **Trigger**: any background job that mutates state
+- **Pattern**: jobs must be idempotent; rely on queue's at-least-once guarantee; never assume exactly-once
+- **Implementation**: job checks "already done?" before acting (often via §20.1 key)
+
+#### §20.4 Retry with Exponential Backoff + Jitter (DDIA Ch.8)
+- **Trigger**: any external API call (Stripe, Resend, S3, third-party)
+- **Pattern**: retry on 5xx/timeout with backoff (1s, 2s, 4s, 8s) + jitter; cap at 5 attempts
+- **Never**: retry on 4xx (except 429 with `Retry-After`)
+
+#### §20.5 Circuit Breaker (DDIA Ch.8) — Tier 2
+- **Trigger**: external dependency that can fail and impact latency (defer until ≥2 outages in 30 days)
+- **Pattern**: track failure rate; open circuit after threshold; half-open after cooldown
+
+### Scalability
+
+#### §20.6 Cache-Aside (DDIA Ch.5) — see §7
+- Full pattern documented in §7
+
+#### §20.7 Read Replicas Awareness (DDIA Ch.5) — Tier 2
+- **Trigger**: read-heavy workload >10:1 read/write (defer until DB CPU >70% sustained)
+- **Pattern**: use `db.Reader()` for SELECT, `db.Writer()` for writes; understand replica lag
+- **MVP**: single DB but code as if reader/writer split — switch is then a config change
+
+#### §20.8 Cursor-Based Pagination (DDIA Ch.6)
+- **Trigger**: list endpoint expected to return >1000 rows
+- **Pattern**: `(created_at, id)` cursor pagination — never `OFFSET` (degrades at scale)
+- **API shape**: `?cursor=<base64>&limit=20` → `{data, next_cursor}`
+
+#### §20.9 Backpressure on Job Queue (DDIA Ch.11) — Tier 2
+- **Trigger**: job producer can outpace consumer (defer until queue depth >5000 sustained)
+- **Pattern**: bounded queue size; return 429 on full; consumer pulls at controlled rate
+
+### Maintainability
+
+#### §20.10 Schema Evolution: Backward-Compatible Migrations (DDIA Ch.4)
+- **Trigger**: any migration on a live table
+- **Pattern**: additive-only within a release (new nullable column, new table); destructive changes split across two releases
+- **Never**: rename a column in a single migration on a live system
+
+#### §20.11 Versioned APIs
+- **Trigger**: public API with external consumers
+- **Pattern**: prefix routes with `/api/v1/`; never break v1 within its lifetime; add v2 for breaking changes; sunset v1 with deprecation header
+
+#### §20.12 Structured Logs with Trace IDs (DDIA Ch.10) — extends §11
+- All logs include: `trace_id`, `span_id`, `user_id` (if authenticated), `request_id`
+
+### Data Integrity
+
+#### §20.13 Transactions with Appropriate Isolation (DDIA Ch.7)
+- **Trigger**: any multi-row write that must be atomic, or any write where lost updates cause harm
+- **Default**: `READ COMMITTED` (Postgres default)
+- **Use `REPEATABLE READ`**: read-heavy reports
+- **Use `SERIALIZABLE` or `SELECT FOR UPDATE`**: payment status, inventory decrements, balance updates — any race causes financial harm
+
+#### §20.14 Optimistic Concurrency / Version Columns (DDIA Ch.7) — Tier 2
+- **Trigger**: collaborative edits on the same record (defer until multiple editors exist)
+- **Pattern**: `version` column; `UPDATE WHERE id = X AND version = Y`; 0-rows-affected → 409 Conflict
+
+#### §20.15 Event Ordering (DDIA Ch.5, Ch.11) — Tier 2
+- **Trigger**: webhook events that arrive out of order (defer until provider sends out-of-order)
+- **Pattern**: store event with monotonic timestamp; reconcile from sorted log, not arrival order
+
+#### §20.16 Soft Deletes (DDIA Ch.5) — see §9
+- Full pattern documented in §9
+
+### Distributed Systems Hygiene
+
+#### §20.17 Webhook Signature Verification (DDIA Ch.8)
+- **Trigger**: every inbound webhook (always — Tier 0)
+- **Pattern**: verify HMAC signature with provider secret BEFORE any processing; reject 401 on mismatch
+
+#### §20.18 Timeouts on Every External Call (DDIA Ch.8)
+- **Trigger**: every HTTP call, DB query, Redis op (always — Tier 0)
+- **Pattern**: explicit timeout (5s HTTP, 1s DB single query, 100ms cache); never `context.Background()` in handlers
+
+#### §20.19 Rate Limiting (DDIA Ch.8)
+- **Tier 0**: auth, payment, signup routes
+- **Tier 2**: all other public routes (defer until abuse is observed)
+- **Pattern**: token bucket per IP/user via Redis; return 429 with `Retry-After`
+
+### Performance
+
+#### §20.20 N+1 Query Prevention
+- **Trigger**: any list endpoint that returns related entities (always — Tier 0)
+- **Pattern**: batch-load via JOIN or `WHERE id IN (...)`; never loop rows issuing one query each
+- **Self-audit**: inspect every list handler for N+1 patterns
+
+#### §20.21 Index by Query Pattern (DDIA Ch.3)
+- **Trigger**: every WHERE clause and ORDER BY in a hot path
+- **Pattern**: composite indexes matching query columns + order; run `EXPLAIN` before merging
+- **Note**: only create indexes on confirmed hot paths — premature indexing slows writes
+
+**Selection rule**: in Phase 2 Pattern Selection, emit `patterns_applied` citing only patterns whose triggers match this project. Use the §21 tier filter. Patterns not listed are NOT implemented.
+
+---
+
+## §21 Lean MVP & Anti-Over-Engineering [MVP]
+
+The default posture is **as simple as possible until proven otherwise.** §19 and §20 are a menu, not a requirement.
+
+### §21.1 Pattern Tiers
+
+| Tier | Meaning | When to apply |
+|------|---------|--------------|
+| **Tier 0 — Safety** | Non-negotiable; skipping risks data loss, double-charges, or security holes | Always, every project |
+| **Tier 1 — Direct trigger** | Apply only when the project brief contains a concrete trigger | Brief explicitly creates the trigger condition |
+| **Tier 2 — Deferred** | Defer until a measured post-launch signal fires | Never at MVP — promote via architecture amendment |
+
+**Tier-0 patterns (always apply):**
+§20.1 (payment/webhook routes only), §20.10, §20.13 (financial state), §20.17, §20.18, §20.20
+
+**Tier-1 patterns (apply on direct trigger):**
+§20.2, §20.3, §20.4, §20.8, §20.11, §20.21
+
+**Tier-2 patterns (defer until measured):**
+§20.5, §20.7, §20.9, §20.14, §20.15, §20.19 (most routes)
+
+### §21.2 The Reverse-YAGNI Test (mandatory at Phase 2)
+
+For every Tier-1 candidate in `patterns_applied`, answer:
+
+> **"If we removed this pattern today, what specifically breaks today (not in a hypothetical future)?"**
+
+If the honest answer is "nothing today, but maybe later" → remove it; move to `patterns_deferred` with the trigger that would later promote it.
+
+### §21.3 Lean MVP Default Profile
+
+Unless the brief explicitly says otherwise:
+
+| Concern | MVP default | Upgrade trigger |
+|---------|-------------|----------------|
+| Architecture | Monolith (one API, one DB, one frontend) | Revisit at >50k req/min sustained |
+| Database | Single Postgres, single region | CPU >70% sustained or read latency >200ms p95 |
+| Cache | Redis for auth + dashboard reads only | Add keys when measured cache-miss latency hurts |
+| Jobs | Async only when sync operation >500ms | Defer queues until actually needed |
+| Search | Postgres `ILIKE` + trigram | Promote to full-text when quality complaints arise |
+| Auth | One IdP (default impl) | Defer SAML/multi-IdP until enterprise customer asks |
+| File storage | S3 equivalent, no CDN | Add CDN when bandwidth bill or latency justifies |
+| Real-time | Polling at 5–10s | Promote to WebSocket when brief explicitly needs <1s |
+
+### §21.4 Pattern Budget for MVP
+
+Soft cap: **≤8 patterns from §20** (excluding Tier-0) per MVP. Exceeding the cap requires an explicit justification per pattern in `patterns_applied`.
+
+### §21.5 Forbidden at MVP (over-engineering smells)
+
+The agent MUST NOT introduce these without explicit user request and concrete reasoning:
+
+- Microservices, message buses (Kafka/NATS/Pulsar)
+- Event sourcing, CQRS
+- Service mesh, sidecar proxies
+- Multi-region active-active
+- gRPC between internal services
+- More than 2 cache layers
+- More than 1 database engine
+- Premature sharding or partitioning
+
+If the agent is tempted to introduce one → STOP and ask the user.
+
+### §21.6 Evolution Protocol (adding patterns post-launch)
+
+1. **Observe**: a measured signal crosses the threshold in `patterns_deferred`
+2. **Document**: write `architecture_amendment.observation` (one line)
+3. **Propose**: the amendment citing the §20 pattern to promote
+4. **Approve**: human reviews — a real trigger justifies real work
+5. **Implement**: move from `patterns_deferred` to `patterns_applied`
+
+**Rule**: patterns are pulled by evidence, never pushed by speculation.
+
+### §21.7 The "Boring Stack" Principle
+
+Prefer boring, proven choices over novel ones at MVP. Postgres over DynamoDB. Monolith over microservices. cron over Airflow. JSON over HTTPS over gRPC streams. The agent's job at MVP is to make the product work — not to build interesting infrastructure.
+
+---
+
+## §22 Reuse Over Reinvent + Project Fit [MVP]
+
+### §22.1 Reuse Hierarchy (mandatory check before writing custom code)
+
+Check in this order. Stop at the first fit:
+
+1. **Existing modkit module** — does an installed module already provide this capability?
+2. **MCP tools available in the session** — Playwright for tests, Canva/Excalidraw for design, GitHub for PRs
+3. **Runtime standard library** — Go stdlib (`net/http`, `crypto/hmac`, `database/sql`); Bun built-ins
+4. **Well-maintained third-party library** — see §22.2 rubric
+5. **Custom implementation** — only if 1–4 genuinely don't fit
+
+**Before writing custom code, emit a `reuse_check` block:**
+```yaml
+reuse_check:
+  capability: "idempotency keys for /pay/:token"
+  checked:
+    - source: "modkit cache module"
+      fit: "partial — Redis client only, no keyed-response wrapper"
+    - source: "Go stdlib"
+      fit: "none"
+    - source: "library: github.com/example/go-idempotency"
+      fit: "yes — MIT, maintained, semver stable"
+  decision: "use go-idempotency library"
+  custom_code_required: "thin middleware wrapper, ~30 lines"
+```
+
+Absence of this block for custom code is a protocol violation.
+
+### §22.2 Library Selection Rubric
+
+A library is acceptable when ALL apply:
+- **Maintained**: commit in last 6 months, OR explicitly marked stable by maintainer
+- **License**: MIT, Apache-2, BSD-3, ISC — flag GPL/AGPL for human review
+- **Stable API**: semver ≥1.0.0; v0.x.x requires explicit human approval
+- **Bounded transitive deps**: <30 for backend, <50 for frontend
+- **Bundle budget** (frontend): per-entry chunk ≤200KB gzipped (or ui-spec budget if specified)
+
+**Red flags**: sole maintainer, no tests, last commit >2 years, single-vendor lock-in.
+
+### §22.3 "Best Practice" is Contextual — Project Fit Rule
+
+Apply patterns and libraries that fit THIS project's reality:
+
+| Project signal | Implication |
+|---------------|-------------|
+| <100 users, prototype, internal tool | Simpler beats "correct" — skip patterns sized for scale you don't have |
+| Financial/regulated/multi-tenant SaaS | Apply more rigor; §20 Tier-0 defaults hold |
+| Solo dev, weekend project | Familiar tools over "best" ones |
+| Large team, long-lived product | Consistency and explicit contracts matter more |
+| Mobile-first or low-bandwidth | Bundle size and payload shape outweigh elegance |
+
+The agent must capture `project_signals` in Phase 2 before applying §21 tiers.
+
+### §22.4 Deviation Documentation
+
+When deliberately departing from §19/§20 defaults due to project fit:
+
+```yaml
+deviations:
+  - rule: §20.2
+    decision: "skip outbox pattern"
+    reason: "single-user admin tool; email failure rate 1/10000 acceptable; retry from UI is fine"
+  - rule: §20.8
+    decision: "use OFFSET pagination"
+    reason: "max 50 invoices per freelancer; OFFSET performance is irrelevant at this scale"
+```
+
+Future agents and humans can tell "deliberate" from "bug." That distinction matters.
+
+### §22.5 Tool Discovery Step (output of Phase 1, input to Phase 2)
+
+After module selection, emit `toolchain.yaml` — see Playbook Phase 1 for schema. This document drives implementation reuse decisions in Phase 3. Never write a feature without first checking if a listed tool already provides it.
+
+### §22.6 The "Don't Reinvent" Smell List
+
+If the agent finds itself implementing one of these from scratch → STOP and find a library:
+
+- HTTP retry / backoff / circuit breaker
+- HMAC signature verification
+- JWT parsing and validation
+- UUID generation
+- Date/time arithmetic (`time` / `date-fns`)
+- Rate limiting (`golang.org/x/time/rate` or Redis-based)
+- CSV / Excel parsing
+- File MIME type detection
+- HTML sanitization
+- Markdown rendering
+- Image resizing
+- Email template rendering
+- Crypto primitives — ALWAYS use stdlib or an audited library; never roll your own
+
+**Self-audit**: scan own code at milestone end for these smells. If found, replace with a library before declaring the milestone complete.
